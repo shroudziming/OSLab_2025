@@ -17,10 +17,13 @@ main:
 	fence
 
 	// TODO: [p1-task1] call BIOS to print string "It's bootblock!"
-
-
+	li a7,9		#BIOS_PUTSTR number:9
+	la a0,msg
+	jal bios_func_entry
 	// TODO: [p1-task2] call BIOS to read kernel in SD card
-
+	#call BIOS_SDREAD :11
+	#parameter:mem_address,num of block,block_id
+	
 
 	// TODO: [p1-task4] load task-related arguments and pass them to kernel
 
@@ -37,5 +40,5 @@ stop:
 
 .data
 
-msg: .string "It's a bootloader...\n\r"
+msg: .string "It's wangziming's bootloader...\n\r"
 
