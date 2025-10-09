@@ -23,7 +23,11 @@ main:
 	// TODO: [p1-task2] call BIOS to read kernel in SD card
 	#call BIOS_SDREAD :11
 	#parameter:mem_address,num of block,block_id
-	
+	li a7,11
+	li a0,kernel	#mem_address
+	lh a1,0x1fc(0x50200000)	#number of block
+	li a2,2
+	jal bios_func_entry	
 
 	// TODO: [p1-task4] load task-related arguments and pass them to kernel
 
