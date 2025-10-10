@@ -15,8 +15,19 @@ ENTRY(_start)
   csrw CSR_SIP, zero
 
   /* TODO: [p1-task2] clear BSS for flat non-ELF images */
+  
+  #bss range:0x50201558~0x50201590
+  li t0,0x50201558	#_bss_start
+  li t1,0x50201590	#_bss_end
 
-
+bss_clear:
+  bge t0,t1,clear_done
+  sd x0,0(t0)		#x0 : 0, 8B
+  addi t0,,t0,8
+  j bss_clear
+clear_done:
+  li sp,0x50500000	#set sp
+  jal main
   /* TODO: [p1-task2] setup C environment */
 
 
