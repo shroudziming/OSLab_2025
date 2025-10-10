@@ -26,11 +26,9 @@ bss_clear:
   addi t0,t0,8
   j bss_clear
 clear_done:
-  li sp,0x50500000	#set sp
-  jal main
   /* TODO: [p1-task2] setup C environment */
-
-
+  li sp,0x50500000	#set stack space
+  jal main
 loop:
   wfi
   j loop
