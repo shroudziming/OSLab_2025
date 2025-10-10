@@ -27,7 +27,7 @@ main:
 	li a0,kernel	#mem_address
 	li t0,0x502001fc
 	lh a1,0(t0)	#num of block
-	li a2,2
+	li a2,1
 	jal bios_func_entry	
 
 	// TODO: [p1-task4] load task-related arguments and pass them to kernel
