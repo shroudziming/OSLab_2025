@@ -29,7 +29,9 @@ main:
 	lh a1,0(t0)	#num of block
 	li a2,1
 	jal bios_func_entry	
-
+	
+	la a0,kernel
+	jr a0
 	// TODO: [p1-task4] load task-related arguments and pass them to kernel
 
 
