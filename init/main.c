@@ -75,7 +75,14 @@ int main(void)
 
     bios_putstr("Hello OS!\n\r");
     bios_putstr(buf);
-
+    
+    int c;
+    while(1){
+	    c = bios_getchar();
+	    if(c != -1){
+		    bios_putchar(c);
+		}
+    }
     // TODO: Load tasks by either task id [p1-task3] or task name [p1-task4],
     //   and then execute them.
 
