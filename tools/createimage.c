@@ -129,7 +129,11 @@ static void create_image(int nfiles, char *files[])
          */
         if (strcmp(*files, "bootblock") == 0) {
             write_padding(img, &phyaddr, SECTOR_SIZE);
-        }
+        } else {
+		int block_size = SECTOR_SIZE * 15;
+		int next_aligned = ((phyaddr + block_size - 1) / block_size) * block_size;
+		wirte_padding(img,&phyaddr,next_aligned);
+	}
 
         fclose(fp);
         files++;
