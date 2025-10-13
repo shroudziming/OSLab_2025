@@ -219,6 +219,16 @@ static void write_img_info(int nbytes_kernel, task_info_t *taskinfo,
 {
     // TODO: [p1-task3] & [p1-task4] write image info to some certain places
     // NOTE: os size, infomation about app-info sector(s) ...
+    short nsectors_kernel = (nbytes_kernel + SECTOR_SIZE - 1) / SECTOR_SIZE;
+
+    //find tail of first sector
+    fseek(img,0x1FC,SEEK_SET);
+    //store kernel sector num (2 Bytes)
+    fwrite(&nsectors_kernel,sizeof(short),1,img);
+    //store task num (2 Bytes)
+    fwrite(&tasknum,sizeof(short),1,img);
+
+    fflush(img);
 }
 
 /* print an error message and exit */
