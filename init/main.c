@@ -8,6 +8,9 @@
 
 #define VERSION_BUF 50
 
+#define APP_BASE 0x52000000
+#define APP_ADDR_INTERVAL 0x10000
+
 int version = 2; // version must between 0 and 9
 char buf[VERSION_BUF];
 
@@ -75,13 +78,25 @@ int main(void)
 
     bios_putstr("Hello OS!\n\r");
     bios_putstr(buf);
-    
+    int taskid = 0;
     int c;
     while(1){
 	    c = bios_getchar();
-	    if(c != -1){
+	    if(c != -1) continue;
+	    if(c == '\r' || c == '\n'){
+		    bios_putchar('\n');
+		    load_task_img(taskid);
+		    void (*user_entry)() = (void (*)())(APP_BASE + taskid * APP_ADDR_INTERVAL);
+		    user_entry();
+    		    bios_putstr("Please input taskid");
+		    taskid = 0;
+	    }else if(c >= '0' && c<= '9'){
 		    bios_putchar(c);
-		}
+		    taskid = taskid * 10 + (c - '0');
+	    }else{
+		    bios_putstr("\n[Error] Invalid input.\n");
+		    taskid = 0;
+	    }
     }
     // TODO: Load tasks by either task id [p1-task3] or task name [p1-task4],
     //   and then execute them.
