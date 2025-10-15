@@ -82,7 +82,7 @@ int main(void)
     int c;
     while(1){
 	    c = bios_getchar();
-	    if(c != -1) continue;
+	    if(c == -1) continue;
 	    if(c == '\r' || c == '\n'){
 		    bios_putchar('\n');
 		    load_task_img(taskid);
