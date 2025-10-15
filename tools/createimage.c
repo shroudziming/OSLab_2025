@@ -102,6 +102,8 @@ static void create_image(int nfiles, char *files[])
         /* read ELF header */
         read_ehdr(&ehdr, fp);
         printf("0x%04lx: %s\n", ehdr.e_entry, *files);
+	
+	long start_phyaddr = phyaddr;
 
         /* for each program header */
         for (int ph = 0; ph < ehdr.e_phnum; ph++) {
@@ -127,17 +129,20 @@ static void create_image(int nfiles, char *files[])
          *  occupies the same number of sectors
          * 2. [p1-task4] only padding bootblock is allowed!
          */
+	
         if (strcmp(*files, "bootblock") == 0) {
             write_padding(img, &phyaddr, SECTOR_SIZE);
         } else {
 		int block_size = SECTOR_SIZE * 15;
-		int next_aligned = ((phyaddr + block_size - 1) / block_size) * block_size;
-		wirte_padding(img,&phyaddr,next_aligned);
+		int written_bytes = phyaddr - start_phyaddr;
+		int next_aligned = ((written_bytes + block_size - 1) / block_size) * block_size;
+		write_padding(img,&phyaddr,start_phyaddr + next_aligned);
 	}
 
         fclose(fp);
         files++;
     }
+
     write_img_info(nbytes_kernel, taskinfo, tasknum, img);
 
     fclose(img);
