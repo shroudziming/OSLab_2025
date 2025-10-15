@@ -20,13 +20,12 @@ uint64_t load_task_img(int taskid)
 		return 0;
 	}
 	short kernel_sectors = 15;
-	short 
 	int block_id = 1 + kernel_sectors + taskid * 15;
 	uintptr_t mem_addr = APP_BASE + taskid * APP_ADDR_INTERVAL;
 	bios_putstr("loading task ");
-	bios_putstr('0' + taskid);
+	bios_putchar('0' + taskid);
 
-	bios_id_read(mem_addr,15,blockid);
+	bios_sd_read(mem_addr,15,block_id);
 
 	bios_putstr("done.");
 
