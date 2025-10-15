@@ -86,7 +86,7 @@ int main(void)
 	    if(c == '\r' || c == '\n'){
 		    bios_putchar('\n');
 		    load_task_img(taskid);
-		    void (*user_entry)() = (void (*)())(APP_BASE + taskid * APP_ADDR_INTERVAL);
+		    void (*user_entry)() = (void (*)())((uintptr_t)APP_BASE + taskid * (uintptr_t)APP_ADDR_INTERVAL);
 		    user_entry();
     		    bios_putstr("Please input taskid");
 		    taskid = 0;
