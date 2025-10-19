@@ -78,6 +78,8 @@ int main(void)
 
     bios_putstr("Hello OS!\n\r");
     bios_putstr(buf);
+    //[p1-task3] load tasks by id
+    /*
     int taskid = 0;
     int c;
     while(1){
@@ -98,8 +100,55 @@ int main(void)
 		    taskid = 0;
 	    }
     }
+    */
+
     // TODO: Load tasks by either task id [p1-task3] or task name [p1-task4],
     //   and then execute them.
+    
+    //[p1-task4] load tasks by name
+    char input[MAX_INPUT_LEN];
+    int len = 0;
+
+    while (1) {
+        int c = bios_getchar();
+        if (c == -1) continue;
+
+        //'Enter' for start
+        if (c == '\r' || c == '\n') {
+            bios_putchar('\n');
+            if (len == 0) {
+                bios_putstr("No input.\n\r");
+                continue;
+            }
+
+            input[len] = '\0';  // 字符串结束符
+
+	    uint64_t entry = load_task_img(input);
+	    if(entry == 0){
+		    bios_putstr("[Error] Failed to load app.\n");
+	    }else{
+	    	    void (*user_entry)() = (void(*)())entry;
+		    user_entry();
+		    bios_putstr("Return to kernel");
+	    }
+
+            //reset buf
+            len = 0;
+            bios_putstr("Please input app name to run:\n");
+            continue;
+        }
+
+        
+        if (c >= 32 && c < 127) {
+            if (len < MAX_INPUT_LEN - 1) {
+                input[len++] = (char)c;
+                bios_putchar(c);
+            }
+        } else {
+            bios_putstr("[Error] Invalid input.\n");
+            len = 0;
+        }
+    }
 
     // Infinite while loop, where CPU stays in a low-power state (QAQQQQQQQQQQQ)
     while (1)
