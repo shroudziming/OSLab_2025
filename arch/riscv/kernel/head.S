@@ -17,8 +17,8 @@ ENTRY(_start)
   /* TODO: [p1-task2] clear BSS for flat non-ELF images */
   
   #bss range:0x50201558~0x50201590
-  li t0,0x50201558	#_bss_start
-  li t1,0x50201590	#_bss_end
+  la t0,__bss_start	#_bss_start
+  la t1,__BSS_END__	#_bss_end
 
 bss_clear:
   bge t0,t1,clear_done
