@@ -15,11 +15,16 @@
 #define BOOT_LOADER_SIG_1 0x55
 #define BOOT_LOADER_SIG_2 0xaa
 
+#define NAME_LEN	32
+
 #define NBYTES2SEC(nbytes) (((nbytes) / SECTOR_SIZE) + ((nbytes) % SECTOR_SIZE != 0))
 
 /* TODO: [p1-task4] design your own task_info_t */
 typedef struct {
-
+	char name[NAME_LEN];
+	uint64_t file_off;	//offset in image
+	uint64_t file_size;	
+	uint64_t entry;		//entrypoint in mem
 } task_info_t;
 
 #define TASK_MAXNUM 16
@@ -104,7 +109,7 @@ static void create_image(int nfiles, char *files[])
         printf("0x%04lx: %s\n", ehdr.e_entry, *files);
 	
 	long start_phyaddr = phyaddr;
-
+	uint64_t total_bytes = 0;	//current program size
         /* for each program header */
         for (int ph = 0; ph < ehdr.e_phnum; ph++) {
 
@@ -115,6 +120,7 @@ static void create_image(int nfiles, char *files[])
 
             /* write segment to the image */
             write_segment(phdr, fp, img, &phyaddr);
+	    total_bytes += get_filesz(phdr);	//sum up
 
             /* update nbytes_kernel */
             if (strcmp(*files, "main") == 0) {
@@ -132,14 +138,22 @@ static void create_image(int nfiles, char *files[])
 	
         if (strcmp(*files, "bootblock") == 0) {
             write_padding(img, &phyaddr, SECTOR_SIZE);
-        } else {
+        }
+	//padding in task3 
+        /*	else {
 		int block_size = SECTOR_SIZE * 15;
 		int written_bytes = phyaddr - start_phyaddr;
 		int next_aligned = ((written_bytes + block_size - 1) / block_size) * block_size;
 		write_padding(img,&phyaddr,start_phyaddr + next_aligned);
+	}*/
+	//[p1-task4] write task_info
+        if(fidx >= 2){
+		strcpy(taskinfo[taskidx].name,*files);
+		taskinfo[taskidx].file_off = start_phyaddr;
+		taskinfo[taskidx].file_size = total_bytes;
+		taskinfo[taskidx].entry = ehdr.e_entry;
 	}
-
-        fclose(fp);
+	fclose(fp);
         files++;
     }
 
@@ -224,6 +238,9 @@ static void write_img_info(int nbytes_kernel, task_info_t *taskinfo,
 {
     // TODO: [p1-task3] & [p1-task4] write image info to some certain places
     // NOTE: os size, infomation about app-info sector(s) ...
+    
+    //[p1-task3] write nsectors_kernel and tasknum
+    /*	
     short nsectors_kernel = (nbytes_kernel + SECTOR_SIZE - 1) / SECTOR_SIZE;
 
     //find tail of first sector
@@ -232,6 +249,37 @@ static void write_img_info(int nbytes_kernel, task_info_t *taskinfo,
     fwrite(&nsectors_kernel,sizeof(short),1,img);
     //store task num (2 Bytes)
     fwrite(&tasknum,sizeof(short),1,img);
+
+    fflush(img);
+    */
+    short nsectors_kernel = (nbytes_kernel + SECTOR_SIZE - 1) / SECTOR_SIZE;
+
+    fseek(img,OS_SIZE_LOC,SEEK_SET);
+    fwrite(&nsectors_kernel,sizeof(short),1,img);
+    fwrite(&tasknum,sizeof(short),1,img);
+
+    //write taskinfo to end of image
+    fseek(img,0,SEEK_END);
+    long table_offset_bytes = ftell(img);
+
+    if(tasknum > 0){
+	    fwrite(taskinfo,sizeof(task_info_t),tasknum,img);
+    }
+
+    //pad end
+    long after = ftell(img);
+    long pad = (SECTOR_SIZE - (after % SECTOR_SIZE)) % SECTOR_SIZE;
+    long i;
+    for(i = 0;i<pad;++i){
+	    fputc(0,img);
+    }
+
+    fflush(img);
+
+    //write table start sector
+    uint32_t table_start_sector = (uint32_t)(table_offset_bytes /SECTOR_SIZE);
+    fseek(img,0x1F8,SEEK_SET);	//0x1F8 - 0x1FB
+    fwrite(&table_start_sector,sizeof(uint32_t),1,img);
 
     fflush(img);
 }
