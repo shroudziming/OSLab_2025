@@ -21,7 +21,8 @@ bss_done:
 	call main
 
     /* TODO: [p1-task3] finish task and return to the kernel, replace this in p3-task2! */
-
+	la t0,0x50201000	#kernel entrypoint
+	jr t0
     /************************************************************/
 	/* Do not touch this comment. Reserved for future projects. */
 	/************************************************************/
