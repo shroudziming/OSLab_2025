@@ -260,7 +260,7 @@ static void write_img_info(int nbytes_kernel, task_info_t *taskinfo,
 
     //write taskinfo to end of image
     fseek(img,0,SEEK_END);
-    long table_offset_bytes = ftell(img);
+    uint32_t table_offset_bytes = ftell(img);
 
     if(tasknum > 0){
 	    fwrite(taskinfo,sizeof(task_info_t),tasknum,img);
@@ -276,10 +276,9 @@ static void write_img_info(int nbytes_kernel, task_info_t *taskinfo,
 
     fflush(img);
 
-    //write table start sector
-    uint32_t table_start_sector = (uint32_t)(table_offset_bytes /SECTOR_SIZE);
+    //write table offset bytes
     fseek(img,0x1F8,SEEK_SET);	//0x1F8 - 0x1FB
-    fwrite(&table_start_sector,sizeof(uint32_t),1,img);
+    fwrite(&table_offset_bytes,sizeof(uint32_t),1,img);
 
     fflush(img);
 }
