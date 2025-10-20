@@ -17,8 +17,8 @@
     bios_putstr(buf);
 }
 */
-short tasknum = *(short *)TASKNUM_ADDR;
-short kernel_sectors = *(short *)KERNEL_SECTORS_ADDR;
+short tasknum;
+short kernel_sectors;
 static int find_task_index(char *name){
 	int i;
 	for(i=0;i<tasknum;++i){
@@ -49,22 +49,23 @@ uint64_t load_task_img(char *taskname)
 	bios_putchar('0' + taskid);
 
 	bios_sd_read(mem_addr,15,block_id);
-	/*unsigned char *p = (unsigned char *)mem_addr;
+	unsigned char *p = (unsigned char *)mem_addr;
 	bios_putstr("First 4 bytes: ");
 	bios_puthex(p[0]);
 	bios_puthex(p[1]);
 	bios_puthex(p[2]);
 	bios_puthex(p[3]);
 	bios_putstr("\n");
-	*/
+	
 	*/
 	
 	//[p1-task4] load by name
-	
+	kernel_sectors = *(short *)KERNEL_SECTORS_ADDR;
+	tasknum = *(short *)(TASKNUM_ADDR);
 	int idx = find_task_index(taskname);
 	if(idx < 0){
 		bios_putstr("[Error] Task not found.\n");
-		return 0;
+		return -1;
 	}
 	bios_putstr("loading task ");
 	bios_putstr(tasks[idx].name);
@@ -78,7 +79,7 @@ uint64_t load_task_img(char *taskname)
 	uint64_t start_sector = offset / SECTOR_SIZE;
 	uint64_t sector_offset = offset % SECTOR_SIZE;
 	uint64_t end_sector = (offset + size + SECTOR_SIZE - 1) / SECTOR_SIZE;
-	uint64_t num_sectors = end_sector - start-sector;
+	uint64_t num_sectors = end_sector - start_sector;
 
 	static uint8_t sector_buf[SECTOR_SIZE * 15];
 
@@ -88,6 +89,7 @@ uint64_t load_task_img(char *taskname)
 
 	
 	bios_putstr("done.\n");
+	
 
-    return 0;
+    return mem_addr;
 }
