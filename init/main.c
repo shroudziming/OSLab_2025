@@ -11,6 +11,10 @@
 #define APP_BASE 0x52000000
 #define APP_ADDR_INTERVAL 0x10000
 
+#define TABLE_OFFSET_ADDR 0x502001F8
+#define KERNEL_SECTOR_ADDR 0x502001FC
+#define TASKNUM_ADDR 0x502001FE
+
 int version = 2; // version must between 0 and 9
 char buf[VERSION_BUF];
 
@@ -43,6 +47,19 @@ static void init_task_info(void)
 {
     // TODO: [p1-task4] Init 'tasks' array via reading app-info sector
     // NOTE: You need to get some related arguments from bootblock first
+    uint16_t kernel_sectors = *(uint16_t*)KERNEL_SECTOR_ADDR;
+    uint16_t tasknum        = *(uint16_t*)TASKNUM_ADDR;
+    uint32_t table_offset   = *(uint32_t*)TABLE_OFFSET_ADDR;
+
+    int start_sector = table_offset / SECTOR_SIZE;
+    int offset_in_sector = table_offset % SECTOR_SIZE;
+    int total_size = sizeof(task_info_t) * tasknum;
+    int total_sectors = (offset_in_sector + total_size + SECTOR_SIZE - 1) / SECTOR_SIZE;
+    
+    uint8_t buffer[SECTOR_SIZE * total_sectors];
+    bios_sd_read(buffer, total_sectors, start_sector);
+    
+    memcpy(tasks, buffer + offset_in_sector, total_size);
 }
 
 /************************************************************/
