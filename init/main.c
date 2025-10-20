@@ -15,6 +15,8 @@
 #define KERNEL_SECTOR_ADDR 0x502001FC
 #define TASKNUM_ADDR 0x502001FE
 
+#define MAX_INPUT_LEN 32
+
 int version = 2; // version must between 0 and 9
 char buf[VERSION_BUF];
 
@@ -57,9 +59,9 @@ static void init_task_info(void)
     int total_sectors = (offset_in_sector + total_size + SECTOR_SIZE - 1) / SECTOR_SIZE;
     
     uint8_t buffer[SECTOR_SIZE * total_sectors];
-    bios_sd_read(buffer, total_sectors, start_sector);
+    bios_sd_read((uintptr_t)buffer, total_sectors, start_sector);
     
-    memcpy(tasks, buffer + offset_in_sector, total_size);
+    memcpy((void *)tasks, buffer + offset_in_sector, total_size);
 }
 
 /************************************************************/
