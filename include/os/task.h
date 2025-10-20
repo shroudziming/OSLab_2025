@@ -13,7 +13,10 @@
 
 /* TODO: [p1-task4] implement your own task_info_t! */
 typedef struct {
-
+	char name[NAME_LEN];
+	uint64_t file_off;
+	uint64_t file_size;
+	uint64_t entry;
 } task_info_t;
 
 extern task_info_t tasks[TASK_MAXNUM];
