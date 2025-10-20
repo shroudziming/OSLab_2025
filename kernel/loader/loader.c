@@ -83,7 +83,7 @@ uint64_t load_task_img(char *taskname)
 
 	static uint8_t sector_buf[SECTOR_SIZE * 15];
 
-	bios_sd_read((uintptr_t)sector_buf,num_sectors,1 + kernel_sectors + start_sector);
+	bios_sd_read((uintptr_t)sector_buf,num_sectors,start_sector);
 	
 	memcpy((void *)mem_addr,sector_buf + sector_offset,size);
 
