@@ -148,11 +148,15 @@ int main(void)
 	    }else{
 	    	    void (*user_entry)() = (void(*)())entry;
 		    user_entry();
-		    bios_putstr("Return to kernel");
+		    bios_putstr("Return to kernel\n");
 	    }
 
             //reset buf
             len = 0;
+	    int i;
+	    for(i = 0;i<MAX_INPUT_LEN;i++){
+		    input[i] = 0;
+	    }
             bios_putstr("Please input app name to run:\n");
             continue;
         }
