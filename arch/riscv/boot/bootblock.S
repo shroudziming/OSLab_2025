@@ -25,7 +25,7 @@ main:
 	#parameter:mem_address,num of block,block_id
 	li a7,11
 	li a0,kernel	#mem_address
-	li t0,0x502001fc
+	li t0,os_size_loc
 	lh a1,0(t0)	#num of block
 	li a2,1
 	jal bios_func_entry	
