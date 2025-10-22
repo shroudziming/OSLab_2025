@@ -23,8 +23,8 @@ bss_done:
     /* TODO: [p1-task3] finish task and return to the kernel, replace this in p3-task2! */
 	ret
     /************************************************************/
-	/* Do not touch this comment. Reserved for future projects. */
-	/************************************************************/
+    /* Do not touch this comment. Reserved for future projects. */
+    /************************************************************/
 // while(1) loop, unreachable here
 loop:
     wfi
