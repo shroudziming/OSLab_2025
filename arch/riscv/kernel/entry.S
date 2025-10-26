@@ -73,6 +73,7 @@ ENTRY(switch_to)
 
   ld sp,0(a1) /* load next sp */
 
+  mv tp,a1 /* current_running */
   /* TODO: [p2-task1] restore all callee save registers from kernel stack,
    * see the definition of `struct switchto_context` in sched.h*/
   ld ra, 0(sp)
