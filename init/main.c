@@ -114,21 +114,10 @@ static void init_pcb_stack(
 static void init_pcb(void)
 {
     /* TODO: [p2-task1] load needed tasks and init their corresponding PCB */
+    //slot version
+    
     init_list_head(&ready_queue);
     init_list_head(&sleep_queue);
-    int i;
-    for(i=0;i<tasknum;i++){
-        pcb[i].pid = i + 1;
-        pcb[i].status = TASK_READY;
-        pcb[i].wakeup_time = 0;
-        pcb[i].cursor_x = 0;
-        pcb[i].cursor_y = 0;
-
-        pcb[i].kernel_sp = allocKernelPage(1) + PAGE_SIZE;
-        pcb[i].user_sp = allocUserPage(1) + PAGE_SIZE;
-
-        list_add_tail(&(pcb[i].list), &ready_queue);
-    }
 
     pid0_pcb.pid = 0;
     pid0_pcb.status = TASK_RUNNING;
@@ -138,10 +127,15 @@ static void init_pcb(void)
     pid0_pcb.kernel_sp = (reg_t)&pid0_stack + PAGE_SIZE;
     pid0_pcb.user_sp = pid0_pcb.kernel_sp;
 
-
+    int i;
+    for(i=0;i<tasknum;i++){
+        pcb[i].pid = -1;
+        pcb[i].status = TASK_EXITED;
+    }
+    
     /* TODO: [p2-task1] remember to initialize 'current_running' */
     current_running = &pid0_pcb;
-    process_id = tasknum + 1;
+    process_id = 1;
 }
 
 static void init_syscall(void)
@@ -219,50 +213,86 @@ int main(void)
     //   and then execute them.
     
     //[p1-task4] load tasks by name
-    // char input[MAX_INPUT_LEN];
-    // int len = 0;
+    
+    char input[MAX_INPUT_LEN];
+    int len = 0;
+    int task_count = 0;
 
-    // while (1) {
-    //     int c = bios_getchar();
-    //     if (c == -1) continue;
+    bios_putstr("Input task names (one per line), type 'start' to begin scheduling:\n");
 
-    //     //'Enter' for start
-    //     if (c == '\r' || c == '\n') {
-    //         bios_putchar('\n');
-    //         if (len == 0) {
-    //             bios_putstr("No input.\n\r");
-    //             continue;
-    //         }
+    while (1) {
+        int c = bios_getchar();
+        if (c == -1) continue;
+        //'Enter' for start
+        if (c == '\r' || c == '\n') {
+            bios_putchar('\n');
+            if (len == 0) {
+                bios_putstr("No input.\n\r");
+                continue;
+            }
 
-    //         input[len] = '\0';  // 字符串结束符
+            input[len] = '\0';  // 字符串结束符
+            if (strcmp(input, "start") == 0) {
+                bios_putstr("Starting scheduling...\n\r");
+                break;
+            }
+            uint64_t entry = load_task_img(input);
+            if(entry == 0){
+                bios_putstr("[Error] Failed to load app.\n");
+            }else{
+                    // void (*user_entry)() = (void(*)())entry;
+                    // user_entry();
+                    // bios_putstr("Return to kernel");
+                    int slot = -1;
+                    for(int i = 0; i < tasknum; i++){
+                        if(pcb[i].status == TASK_EXITED || pcb[i].pid == -1){
+                            slot = i;
+                            break;
+                        }
+                    }
+                    if(slot == -1){
+                        bios_putstr("[Error] No available slot.\n");
+                    } else{
+                        pcb_t *p = &pcb[slot];
+                        p->pid = process_id++;
+                        p->wakeup_time = 0;
+                        p->cursor_x = 0;
+                        p->cursor_y = 0;
 
-	//     uint64_t entry = load_task_img(input);
-	//     if(entry == 0){
-	// 	    bios_putstr("[Error] Failed to load app.\n");
-	//     }else{
-	//     	    void (*user_entry)() = (void(*)())entry;
-	// 	    user_entry();
-	// 	    bios_putstr("Return to kernel");
-	//     }
+                        ptr_t kernel_sp = allocKernelPage(1) + PAGE_SIZE;
+                        ptr_t user_sp = allocUserPage(1) + PAGE_SIZE;
 
-    //         //reset buf
-    //         len = 0;
-    //         bios_putstr("Please input app name to run:\n");
-    //         continue;
-    //     }
+                        init_pcb_stack(kernel_sp, user_sp, (ptr_t)entry, p);
+                        p->status = TASK_READY;
+                        list_add_tail(&p->list, &ready_queue);
+                        
+                    }
+            }
+
+            //reset buf
+            len = 0;
+            bios_putstr("Please input app name to run:\n");
+            continue;
+        }
 
         
-    //     if (c >= 32 && c < 127) {
-    //         if (len < MAX_INPUT_LEN - 1) {
-    //             input[len++] = (char)c;
-    //             bios_putchar(c);
-    //         }
-    //     } else {
-    //         bios_putstr("[Error] Invalid input.\n");
-    //         len = 0;
-    //     }
-    // }
-
+        if (c >= 32 && c < 127) {
+            if (len < MAX_INPUT_LEN - 1) {
+                input[len++] = (char)c;
+                bios_putchar(c);
+            }
+        } else if (c == '\b' || c == 127) {  // 退格键处理
+                if (len > 0) {
+                    len--;
+                    bios_putstr("\b \b");  // 回退显示
+                }
+        } else {
+            bios_putstr("[Error] Invalid input.\n");
+            len = 0;
+        }
+    }
+    
+    init_screen();
     // Infinite while loop, where CPU stays in a low-power state (QAQQQQQQQQQQQ)
     while (1)
     {
