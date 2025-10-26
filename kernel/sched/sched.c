@@ -8,7 +8,7 @@
 #include <assert.h>
 
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
-#define container_of(ptr,type,member) \    ((type *)((char *)(ptr) - offsetof(type,member)))
+#define container_of(ptr,type,member) ((type *)((char *)(ptr) - offsetof(type,member)))
 
 pcb_t pcb[NUM_MAX_TASK];
 const ptr_t pid0_stack = INIT_KERNEL_STACK + PAGE_SIZE;
