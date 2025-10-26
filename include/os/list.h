@@ -51,5 +51,26 @@ typedef list_node_t list_head;
 #define LIST_HEAD(name) struct list_node name = {&(name), &(name)}
 
 /* TODO: [p2-task1] implement your own list API */
+static inline void init_list_head(list_head *head){
+    head->next = head;
+    head->prev = head;
+}
 
+static inline void list_add_tail(list_node_t *node,list_head *head){
+    list_node_t *last = head->prev;
+    node->next = head;
+    node->prev = last;
+    last->next = node;
+    head->prev = node;
+}
+static inline void list_del(list_node_t *node){
+    list_node_t *prev = node->prev;
+    list_node_t *next = node->next;
+    prev->next = next;
+    next->prev = prev;
+}
+
+static inline int list_empty(const list_head *head){
+    return head->next == head;
+}
 #endif
