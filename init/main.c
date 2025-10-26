@@ -59,10 +59,10 @@ static void init_jmptab(void)
     jmptab[MUTEX_RELEASE]   = (long (*)())do_mutex_lock_release;
 
     // TODO: [p2-task1] (S-core) initialize system call table.
-    jmptab[SYS_YIELD] = (long (*)())do_scheduler;
-    jmptab[SYS_MOVE_CURSOR] = (long (*)())screen_move_cursor;
-    jmptab[SYS_WRITE] = (long (*)())screen_write;
-    jmptab[SYS_REFLUSH] = (long (*)())screen_reflush;
+    jmptab[SYSCALL_YIELD] = (long (*)())do_scheduler;
+    jmptab[SYSCALL_CURSOR] = (long (*)())screen_move_cursor;
+    jmptab[SYSCALL_WRITE] = (long (*)())screen_write;
+    jmptab[SYSCALL_REFLUSH] = (long (*)())screen_reflush;
 }
 
 static void init_task_info(void)
