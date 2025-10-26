@@ -4,6 +4,7 @@
 #include <os/loader.h>
 #include <os/irq.h>
 #include <os/sched.h>
+#include <os/list.h>
 #include <os/lock.h>
 #include <os/kernel.h>
 #include <os/task.h>
@@ -17,7 +18,6 @@
 #include <type.h>
 #include <csr.h>
 
-<<<<<<< HEAD
 #define VERSION_BUF 50
 
 #define APP_BASE 0x52000000
@@ -31,13 +31,13 @@
 
 int version = 2; // version must between 0 and 9
 char buf[VERSION_BUF];
-=======
 extern void ret_from_exception();
->>>>>>> upstream/Project2
 
 // Task info array
 task_info_t tasks[TASK_MAXNUM];
-
+extern uint16_t kernel_sectors;
+extern uint16_t tasknum;
+extern uint32_t table_offset;
 
 static void init_jmptab(void)
 {
@@ -66,9 +66,6 @@ static void init_task_info(void)
 {
     // TODO: [p1-task4] Init 'tasks' array via reading app-info sector
     // NOTE: You need to get some related arguments from bootblock first
-    uint16_t kernel_sectors = *(uint16_t*)KERNEL_SECTOR_ADDR;
-    uint16_t tasknum        = *(uint16_t*)TASKNUM_ADDR;
-    uint32_t table_offset   = *(uint32_t*)TABLE_OFFSET_ADDR;
 
     int start_sector = table_offset / SECTOR_SIZE;
     int offset_in_sector = table_offset % SECTOR_SIZE;
@@ -107,10 +104,34 @@ static void init_pcb_stack(
 static void init_pcb(void)
 {
     /* TODO: [p2-task1] load needed tasks and init their corresponding PCB */
+    init_list_head(&ready_queue);
+    init_list_head(&sleep_queue);
+    int i;
+    for(i=0;i<tasknum;i++){
+        pcb[i].pid = i + 1;
+        pcb[i].status = TASK_READY;
+        pcb[i].wakeup_time = 0;
+        pcb[i].cursor_x = 0;
+        pcb[i].cursor_y = 0;
+
+        pcb[i].kernel_sp = allocKernelPage(1) + PAGE_SIZE;
+        pcb[i].user_sp = allocUserPage(1) + PAGE_SIZE;
+
+        list_add_tail(&(pcb[i].list), &ready_queue);
+    }
+
+    pid0_pcb.pid = 0;
+    pid0_pcb.status = TASK_RUNNING;
+    pid0_pcb.wakeup_time = 0;
+    pid0_pcb.cursor_x = 0;
+    pid0_pcb.cursor_y = 0;
+    pid0_pcb.kernel_sp = (reg_t)&pid0_stack + PAGE_SIZE;
+    pid0_pcb.user_sp = pid0_pcb.kernel_sp;
 
 
     /* TODO: [p2-task1] remember to initialize 'current_running' */
-
+    current_running = &pid0_pcb;
+    process_id = tasknum + 1;
 }
 
 static void init_syscall(void)
@@ -121,6 +142,10 @@ static void init_syscall(void)
 
 int main(void)
 {
+    kernel_sectors = *(uint16_t*)KERNEL_SECTOR_ADDR;
+    tasknum        = *(uint16_t*)TASKNUM_ADDR;
+    table_offset   = *(uint32_t*)TABLE_OFFSET_ADDR;
+
     // Init jump table provided by kernel and bios(ΦωΦ)
     init_jmptab();
 
@@ -154,7 +179,6 @@ int main(void)
     // NOTE: The function of sstatus.sie is different from sie's
     
 
-<<<<<<< HEAD
     bios_putstr("Hello OS!\n\r");
     bios_putstr(buf);
     //[p1-task3] load tasks by id
@@ -180,8 +204,6 @@ int main(void)
 	    }
     }
     */
-=======
->>>>>>> upstream/Project2
 
     // TODO: Load tasks by either task id [p1-task3] or task name [p1-task4],
     //   and then execute them.
