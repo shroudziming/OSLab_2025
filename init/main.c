@@ -102,6 +102,13 @@ static void init_pcb_stack(
     switchto_context_t *pt_switchto =
         (switchto_context_t *)((ptr_t)pt_regs - sizeof(switchto_context_t));
 
+    pt_switchto->regs[0] = (reg_t)entry_point;
+    pcb->kernel_sp = (reg_t)pt_switchto;
+    pcb->user_sp = user_stack;
+    pcb->status = TASK_READY;
+    for(int i = 1; i < 14; i++){
+        pt_switchto->regs[i] = 0;
+    }
 }
 
 static void init_pcb(void)
