@@ -7,6 +7,9 @@
 #include <printk.h>
 #include <assert.h>
 
+#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+#define container_of(ptr,type,member) \    ((type *)((char *)(ptr) - offsetof(type,member)))
+
 pcb_t pcb[NUM_MAX_TASK];
 const ptr_t pid0_stack = INIT_KERNEL_STACK + PAGE_SIZE;
 pcb_t pid0_pcb = {
@@ -30,10 +33,25 @@ void do_scheduler(void)
     /************************************************************/
 
     // TODO: [p2-task1] Modify the current_running pointer.
+    pcb_t *prev = current_running;
+    pcb_t *next;
 
+    if(prev->pid != 0 && prev->status == TASK_RUNNING){
+        prev->status = TASK_READY;
+        list_add_tail(&prev->list, &ready_queue);
+    }
+
+    if(!list_empty(&ready_queue)){
+        list_node_t *next_node = ready_queue.next;
+        list_del(next_node);
+        next = container_of(next_node, pcb_t, list);
+        next->status = TASK_RUNNING;
+    } else{
+        next = &pid0_pcb;
+    }
 
     // TODO: [p2-task1] switch_to current_running
-
+    switch_to(prev, next);
 }
 
 void do_sleep(uint32_t sleep_time)
