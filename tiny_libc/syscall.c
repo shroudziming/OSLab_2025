@@ -45,7 +45,7 @@ void sys_reflush(void)
 int sys_mutex_init(int key)
 {
     /* TODO: [p2-task2] call call_jmptab to implement sys_mutex_init */
-    return jmptab(SYSCALL_LOCK_INIT,(long)key, IGNORE, IGNORE, IGNORE, IGNORE);
+    return call_jmptab(SYSCALL_LOCK_INIT,(long)key, IGNORE, IGNORE, IGNORE, IGNORE);
     /* TODO: [p2-task3] call invoke_syscall to implement sys_mutex_init */
     return 0;
 }
