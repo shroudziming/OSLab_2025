@@ -66,9 +66,28 @@ void do_sleep(uint32_t sleep_time)
 void do_block(list_node_t *pcb_node, list_head *queue)
 {
     // TODO: [p2-task2] block the pcb task into the block queue
+    pcb_t *pcb = container_of(pcb_node, pcb_t, list);
+
+    pcb->status = TASK_BLOCKED;
+    if(!list_empty(&ready_queue)){
+        list_del(pcb_node);
+    }
+
+    list_add_tail(pcb_node, queue);
+    if(current_running == pcb){
+        do_scheduler();
+    }
 }
 
 void do_unblock(list_node_t *pcb_node)
 {
     // TODO: [p2-task2] unblock the `pcb` from the block queue
+
+    pcb_t *pcb = container_of(pcb_node, pcb_t, list);
+
+    pcb->status = TASK_READY;
+
+    list_del(pcb_node);
+    list_add_tail(pcb_node, &ready_queue);
+    
 }
