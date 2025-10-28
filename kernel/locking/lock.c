@@ -5,6 +5,9 @@
 
 mutex_lock_t mlocks[LOCK_NUM];
 
+#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+#define container_of(ptr,type,member) ((type *)((char *)(ptr) - offsetof(type,member)))
+
 void init_locks(void)
 {
     /* TODO: [p2-task2] initialize mlocks */
@@ -12,6 +15,8 @@ void init_locks(void)
         spin_lock_init(&mlocks[i].lock);
         init_list_head(&mlocks[i].block_queue);
         mlocks[i].key = -1;
+        mlocks[i].owner = -1;
+        mlocks[i].locked = 0;
     }
 }
 
@@ -24,9 +29,12 @@ void spin_lock_init(spin_lock_t *lock)
 int spin_lock_try_acquire(spin_lock_t *lock)
 {
     /* TODO: [p2-task2] try to acquire spin lock */
-    int expected = UNLOCKED;
-    if(atomic_cmpxchg(&lock->status,&expected,LOCKED) == 0){
-        return 1;   // acquired
+    uint32_t old_val = UNLOCKED;
+    uint32_t expected = LOCKED;
+
+    uint32_t ret = atomic_cmpxchg(old_val,expected,(ptr_t)&lock->status);
+    if(ret == UNLOCKED){
+        return 1;   //success
     }
     return 0;   //failed
 }
@@ -42,7 +50,7 @@ void spin_lock_acquire(spin_lock_t *lock)
 void spin_lock_release(spin_lock_t *lock)
 {
     /* TODO: [p2-task2] release spin lock */
-    lock->status = UNLOCKED;
+    atomic_swap(UNLOCKED,(ptr_t)&lock->status);
 }
 
 int do_mutex_lock_init(int key)
@@ -63,12 +71,14 @@ int do_mutex_lock_init(int key)
         if(mlocks[i].key == -1){
             mlocks[i].key = key;
             init_list_head(&mlocks[i].block_queue);
+            mlocks[i].owner = -1;
+            mlocks[i].locked = 0;
             spin_lock_release(&mlocks[i].lock);
             return i;   //return handle
         }
         spin_lock_release(&mlocks[i].lock);
     }
-    return 0;   //lock full
+    return -1;   //lock full
 }
 
 void do_mutex_lock_acquire(int mlock_idx)
@@ -81,11 +91,25 @@ void do_mutex_lock_acquire(int mlock_idx)
 
     spin_lock_acquire(&mutex->lock);
 
-    if(!list_empty(&mutex->block_queue)){
-        do_block(&current_running->list, &mutex->block_queue);
-        spin_lock_release(&mutex->lock);
-    }else{
+    // if(!list_empty(&mutex->block_queue)){
+    //     do_block(&current_running->list, &mutex->block_queue);
+    //     spin_lock_release(&mutex->lock);
+    // }else{
+    //     list_add_tail(&current_running->list, &mutex->block_queue);
+    //     spin_lock_release(&mutex->lock);
+    // }
+
+    if (mutex->locked) {
+        // 锁被占用，加入等待队列并阻塞
         list_add_tail(&current_running->list, &mutex->block_queue);
+        
+        spin_lock_release(&mutex->lock);
+
+        do_block(&current_running->list, &mutex->block_queue);
+    } else {
+        // 锁空闲，获得锁
+        mutex->locked = 1;
+        mutex->owner = current_running->pid;
         spin_lock_release(&mutex->lock);
     }
 }
@@ -100,13 +124,22 @@ void do_mutex_lock_release(int mlock_idx)
 
     spin_lock_acquire(&mutex->lock);
 
-    list_del(&current_running->list);
-
     if(!list_empty(&mutex->block_queue)){
-        list_node_t *next = mutex->block_queue.next;
-        do_unblock(next);
+        //取出第一个等待者
+        list_node_t *next_wait = mutex->block_queue.next;
+        pcb_t *next_pcb = container_of(next_wait, pcb_t, list);
 
-        pcb_t *next_pcb = container_of(next, pcb_t, list);
+        if(next_pcb != NULL && next_pcb->status == TASK_BLOCKED){
+            mutex->owner = next_pcb->pid;
+            mutex->locked = 1;
+            do_unblock(next_wait);
+        } else {
+            mutex->locked = 0;
+            mutex->owner = -1;
+        }
+    }else {
+        mutex->locked = 0;
+        mutex->owner = -1;
     }
     spin_lock_release(&mutex->lock);
 }
