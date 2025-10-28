@@ -102,15 +102,16 @@ static void init_pcb_stack(
     switchto_context_t *pt_switchto =
         (switchto_context_t *)((ptr_t)pt_regs - sizeof(switchto_context_t));
 
-    pt_switchto->regs[0] = (reg_t)entry_point;
-    pcb->kernel_sp = (reg_t)pt_switchto;
-    pcb->user_sp = user_stack;
-    pcb->status = TASK_READY;
-    for(int i = 1; i < 14; i++){
+    for(int i = 0; i < 14; i++){
         pt_switchto->regs[i] = 0;
     }
+    pt_switchto->regs[0] = (reg_t)entry_point;  //ra
+    pt_switchto->regs[1] = (reg_t)kernel_stack;  //sp
+    pcb->kernel_sp = (reg_t)pt_switchto;
+    pcb->user_sp = pcb->kernel_sp;
+    pcb->status = TASK_READY;
+    
 }
-
 static void init_pcb(void)
 {
     /* TODO: [p2-task1] load needed tasks and init their corresponding PCB */
@@ -118,14 +119,6 @@ static void init_pcb(void)
     
     init_list_head(&ready_queue);
     init_list_head(&sleep_queue);
-
-    pid0_pcb.pid = 0;
-    pid0_pcb.status = TASK_RUNNING;
-    pid0_pcb.wakeup_time = 0;
-    pid0_pcb.cursor_x = 0;
-    pid0_pcb.cursor_y = 0;
-    pid0_pcb.kernel_sp = (reg_t)&pid0_stack + PAGE_SIZE;
-    pid0_pcb.user_sp = pid0_pcb.kernel_sp;
 
     int i;
     for(i=0;i<tasknum;i++){
@@ -216,7 +209,6 @@ int main(void)
     
     char input[MAX_INPUT_LEN];
     int len = 0;
-    int task_count = 0;
 
     bios_putstr("Input task names (one per line), type 'start' to begin scheduling:\n");
 
