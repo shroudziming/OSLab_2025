@@ -85,7 +85,9 @@ static void init_task_info(void)
 static void init_pcb_stack(
     ptr_t kernel_stack, ptr_t user_stack, ptr_t entry_point,
     pcb_t *pcb)
-{
+{   
+    kernel_stack = allocKernelPage(1) + PAGE_SIZE;
+    user_stack = allocUserPage(1) + PAGE_SIZE;
      /* TODO: [p2-task3] initialization of registers on kernel stack
       * HINT: sp, ra, sepc, sstatus
       * NOTE: To run the task in user mode, you should set corresponding bits
@@ -105,10 +107,13 @@ static void init_pcb_stack(
     for(int i = 0; i < 14; i++){
         pt_switchto->regs[i] = 0;
     }
+
+    
+
     pt_switchto->regs[0] = (reg_t)entry_point;  //ra
     pt_switchto->regs[1] = (reg_t)kernel_stack;  //sp
     pcb->kernel_sp = (reg_t)pt_switchto;
-    pcb->user_sp = pcb->kernel_sp;
+    pcb->user_sp = (reg_t)user_stack;      //pay attention in task3 !!!
     pcb->status = TASK_READY;
     
 }
@@ -128,7 +133,6 @@ static void init_pcb(void)
     
     /* TODO: [p2-task1] remember to initialize 'current_running' */
     current_running = &pid0_pcb;
-    process_id = 1;
 }
 
 static void init_syscall(void)
@@ -229,8 +233,9 @@ int main(void)
                 break;
             }
             uint64_t entry = load_task_img(input);
-            if(entry == 0){
+            if(entry == -1){
                 bios_putstr("[Error] Failed to load app.\n");
+                
             }else{
                     // void (*user_entry)() = (void(*)())entry;
                     // user_entry();
@@ -251,11 +256,10 @@ int main(void)
                         p->cursor_x = 0;
                         p->cursor_y = 0;
 
-                        ptr_t kernel_sp = allocKernelPage(1) + PAGE_SIZE;
-                        ptr_t user_sp = allocUserPage(1) + PAGE_SIZE;
+                        ptr_t kernel_sp;
+                        ptr_t user_sp;
 
                         init_pcb_stack(kernel_sp, user_sp, (ptr_t)entry, p);
-                        p->status = TASK_READY;
                         list_add_tail(&p->list, &ready_queue);
                         
                     }

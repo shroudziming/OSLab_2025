@@ -111,7 +111,7 @@ ENTRY(exception_handler_entry)
 
 
   /* TODO: [p2-task3] call interrupt_helper
-   * NOTE: don't forget to pass parameters for it.
+   * NOTE: don not forget to pass parameters for it.
    */
 
 
