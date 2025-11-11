@@ -146,13 +146,16 @@ static void init_pcb(void)
 static void init_syscall(void)
 {
     // TODO: [p2-task3] initialize system call table.
-    syscall[SYSCALL_YIELD] = sys_yield;
-    syscall[SYSCALL_CURSOR] = sys_move_cursor;
-    syscall[SYSCALL_WRITE] = sys_write;
-    syscall[SYSCALL_REFLUSH] = sys_reflush;
-    syscall[MUTEX_INIT] = sys_mutex_init;
-    syscall[MUTEX_ACQ] = sys_mutex_acquire;
-    syscall[MUTEX_RELEASE] = sys_mutex_release;
+    syscall[SYSCALL_SLEEP] = (long (*)())do_sleep;
+    syscall[SYSCALL_YIELD] = (long (*)())do_scheduler;
+    syscall[SYSCALL_CURSOR] = (long (*)())screen_move_cursor;
+    syscall[SYSCALL_WRITE] = (long (*)())screen_write;
+    syscall[SYSCALL_REFLUSH] = (long (*)())screen_reflush;
+    syscall[SYSCALL_LOCK_INIT] = (long (*)())do_mutex_lock_init;
+    syscall[SYSCALL_LOCK_ACQ] = (long (*)())do_mutex_lock_acquire;
+    syscall[SYSCALL_LOCK_RELEASE] = (long (*)())do_mutex_lock_release;
+    syscall[SYSCALL_GET_TICK] = (long (*)())get_ticks;
+    syscall[SYSCALL_GET_TIMEBASE] = (long (*)())get_time_base;
 
 }
 /************************************************************/
