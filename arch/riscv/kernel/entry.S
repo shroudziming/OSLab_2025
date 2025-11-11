@@ -17,6 +17,10 @@
   sd t0, OFFSET_REG_T0(sp)
   sd t1, OFFSET_REG_T1(sp)
   sd t2, OFFSET_REG_T2(sp)
+
+  ld t0,PCB_USER_SP(tp)
+  sd t0, OFFSET_REG_SP(sp)  //save user sp
+
   sd s0, OFFSET_REG_S0(sp)
   sd s1, OFFSET_REG_S1(sp)
   sd a0, OFFSET_REG_A0(sp)
@@ -144,6 +148,8 @@ ENTRY(switch_to)
 
   /* TODO: [p2-task1] save all callee save registers on kernel stack,
    * see the definition of `struct switchto_context` in sched.h*/
+  sd sp,PCB_KERNEL_SP(a0)
+
   sd ra, SWITCH_TO_RA(sp)
   sd sp, SWITCH_TO_SP(sp)
   sd s0, SWITCH_TO_S0(sp)
@@ -159,11 +165,9 @@ ENTRY(switch_to)
   sd s10, SWITCH_TO_S10(sp)
   sd s11, SWITCH_TO_S11(sp)
 
-  sd sp,0(a0) /* save current sp */
+  addi tp, a1, 0
+  ld sp, PCB_KERNEL_SP(a1)  //next PCB
 
-  ld sp,0(a1) /* load next sp */
-
-  mv tp,a1 /* current_running */
   /* TODO: [p2-task1] restore all callee save registers from kernel stack,
    * see the definition of `struct switchto_context` in sched.h*/
   ld ra, SWITCH_TO_RA(sp)
@@ -182,6 +186,7 @@ ENTRY(switch_to)
   ld s11, SWITCH_TO_S11(sp)
 
   addi sp, sp, SWITCH_TO_SIZE
+  sd sp, PCB_KERNEL_SP(a1)
   jr ra
 ENDPROC(switch_to)
 
