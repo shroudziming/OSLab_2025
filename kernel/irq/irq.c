@@ -46,7 +46,7 @@ void init_exception()
     {
         exc_table[i] = handle_other;
     }
-    exc_table[EXC_SYSCALL] = handle_syscall;
+    exc_table[EXCC_SYSCALL] = handle_syscall;
     /* TODO: [p2-task4] initialize irq_table */
     /* NOTE: handle_int, handle_other, etc.*/
     for(int i = 0; i < IRQC_COUNT; i++){
