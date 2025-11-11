@@ -86,8 +86,6 @@ static void init_pcb_stack(
     ptr_t kernel_stack, ptr_t user_stack, ptr_t entry_point,
     pcb_t *pcb)
 {   
-    kernel_stack = allocKernelPage(1) + PAGE_SIZE;
-    user_stack = allocUserPage(1) + PAGE_SIZE;
      /* TODO: [p2-task3] initialization of registers on kernel stack
       * HINT: sp, ra, sepc, sstatus
       * NOTE: To run the task in user mode, you should set corresponding bits
@@ -98,16 +96,12 @@ static void init_pcb_stack(
     pt_regs->regs[1] = (reg_t)entry_point;   //ra
     pt_regs->regs[2] = (reg_t)user_stack;   //sp
     pt_regs->regs[4] = (uint64_t)pcb;     //tp
-    pt_regs->sepc = (reg_t)entry_point;
+    pt_regs->sepc = (uint64_t)entry_point;
 
     //set sstatus
     pt_regs->sstatus = 0;
     pt_regs->sstatus &= ~SR_SPP;   //SPP,from user mode
     pt_regs->sstatus |= SR_SPIE;   //SPIE, enable interrupt
-    
-    pt_regs->scause = 0;
-    pt_regs->sbadaddr = 0;
-
 
     /* TODO: [p2-task1] set sp to simulate just returning from switch_to
      * NOTE: you should prepare a stack, and push some values to
@@ -119,12 +113,9 @@ static void init_pcb_stack(
     for(int i = 0; i < 14; i++){
         pt_switchto->regs[i] = 0;
     }
-
+    pcb->kernel_sp = kernel_stack - sizeof(switchto_context_t) - sizeof(regs_context_t);
     pt_switchto->regs[0] = (reg_t)ret_from_exception;  //ra
-    pt_switchto->regs[1] = (reg_t)kernel_stack;  //sp
-    pcb->kernel_sp = (reg_t)pt_switchto;
-    pcb->user_sp = (reg_t)user_stack;      //pay attention in task3 !!!
-    pcb->status = TASK_READY;
+    pt_switchto->regs[1] = pcb->kernel_sp;  //sp
     
 }
 static void init_pcb(void)
@@ -203,40 +194,14 @@ int main(void)
 
     bios_putstr("Hello OS!\n\r");
     bios_putstr(buf);
-    //[p1-task3] load tasks by id
-    /*
-    int taskid = 0;
-    int c;
-    while(1){
-	    c = bios_getchar();
-	    if(c == -1) continue;
-	    if(c == '\r' || c == '\n'){
-		    bios_putchar('\n');
-		    load_task_img(taskid);
-		    void (*user_entry)() = (void (*)())((uintptr_t)APP_BASE + taskid * (uintptr_t)APP_ADDR_INTERVAL);
-		    user_entry();
-    		    bios_putstr("Please input taskid");
-		    taskid = 0;
-	    }else if(c >= '0' && c<= '9'){
-		    bios_putchar(c);
-		    taskid = taskid * 10 + (c - '0');
-	    }else{
-		    bios_putstr("\n[Error] Invalid input.\n");
-		    taskid = 0;
-	    }
-    }
-    */
-
-    // TODO: Load tasks by either task id [p1-task3] or task name [p1-task4],
-    //   and then execute them.
-    
-    //[p1-task4] load tasks by name
     
     char input[MAX_INPUT_LEN];
     int len = 0;
 
     bios_putstr("Input task names (one per line), type 'start' to begin scheduling:\n");
-
+    pid0_pcb.status = TASK_RUNNING;
+    init_list_head(&pid0_pcb.list);
+    init_pcb_stack(pid0_pcb.kernel_sp, pid0_pcb.user_sp, (uint64_t)ret_from_exception, &pid0_pcb);
     while (1) {
         int c = bios_getchar();
         if (c == -1) continue;
@@ -273,14 +238,13 @@ int main(void)
                     } else{
                         pcb_t *p = &pcb[slot];
                         p->pid = process_id++;
+                        p->status = TASK_READY;
                         p->wakeup_time = 0;
                         p->cursor_x = 0;
                         p->cursor_y = 0;
-
-                        ptr_t kernel_sp;
-                        ptr_t user_sp;
-
-                        init_pcb_stack(kernel_sp, user_sp, (ptr_t)entry, p);
+                        p->kernel_sp = (reg_t)(allocKernelPage(1) + PAGE_SIZE);
+                        p->user_sp = (reg_t)(allocUserPage(1) + PAGE_SIZE);
+                        init_pcb_stack(p->kernel_sp, p->user_sp, (ptr_t)entry, p);
                         list_add_tail(&p->list, &ready_queue);
                         
                     }
@@ -308,7 +272,6 @@ int main(void)
             len = 0;
         }
     }
-    
     init_screen();
     // Infinite while loop, where CPU stays in a low-power state (QAQQQQQQQQQQQ)
     while (1)
