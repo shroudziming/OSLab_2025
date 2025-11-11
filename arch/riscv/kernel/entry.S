@@ -103,16 +103,19 @@ ENDPROC(ret_from_exception)
 ENTRY(exception_handler_entry)
 
   /* TODO: [p2-task3] save context via the provided macro */
-
+  SAVE_CONTEXT
 
   /* TODO: [p2-task3] load ret_from_exception into $ra so that we can return to
    * ret_from_exception when interrupt_help complete.
    */
-
+  la ra, ret_from_exception
 
   /* TODO: [p2-task3] call interrupt_helper
    * NOTE: don not forget to pass parameters for it.
    */
+  csrr a0,sp      // regs_context_t
+  csrr a1,stval   // sbadaddr
+  csrr a2,scause  // scause
 
 
 ENDPROC(exception_handler_entry)
