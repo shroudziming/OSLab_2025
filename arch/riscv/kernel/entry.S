@@ -52,12 +52,12 @@
   /* TODO: [p2-task3] save sstatus, sepc, stval and scause on kernel stack */
   csrr t0, sstatus
   sd t0, OFFSET_REG_SSTATUS(sp)
-  cssr t0, sepc
+  csrr t0, sepc
   sd t0, OFFSET_REG_SEPC(sp)
   csrr t0, stval
   sd t0, OFFSET_REG_SBADADDR(sp)
   csrr t0, scause
-  sd t0, OFFSET_REG_SCASE(sp)
+  sd t0, OFFSET_REG_SCAUSE(sp)
 .endm
 
 .macro RESTORE_CONTEXT
@@ -196,7 +196,7 @@ ENTRY(exception_handler_entry)
   /* TODO: [p2-task3] call interrupt_helper
    * NOTE: don not forget to pass parameters for it.
    */
-  csrr a0,sp      // regs_context_t
+  mv a0,sp      // regs_context_t
   csrr a1,stval   // sbadaddr
   csrr a2,scause  // scause
 
