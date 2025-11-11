@@ -95,6 +95,16 @@ static void init_pcb_stack(
       */
     regs_context_t *pt_regs =
         (regs_context_t *)(kernel_stack - sizeof(regs_context_t));
+    pt_regs->regs[2] = (reg_t)user_stack;   //sp
+    pt_regs->sepc = (reg_t)entry_point;
+
+    //set sstatus
+    pt_regs->sstatus = 0;
+    pt_regs->sstatus &= (1 << 8);   //SPP,from user mode
+    pt_regs->sstatus |= (1 << 5);   //SPIE, enable interrupt
+    
+    pt_regs->scause = 0;
+    pt_regs->sbadaddr = 0;
 
 
     /* TODO: [p2-task1] set sp to simulate just returning from switch_to
@@ -108,9 +118,7 @@ static void init_pcb_stack(
         pt_switchto->regs[i] = 0;
     }
 
-    
-
-    pt_switchto->regs[0] = (reg_t)entry_point;  //ra
+    pt_switchto->regs[0] = (reg_t)ret_from_exception;  //ra
     pt_switchto->regs[1] = (reg_t)kernel_stack;  //sp
     pcb->kernel_sp = (reg_t)pt_switchto;
     pcb->user_sp = (reg_t)user_stack;      //pay attention in task3 !!!
@@ -138,6 +146,14 @@ static void init_pcb(void)
 static void init_syscall(void)
 {
     // TODO: [p2-task3] initialize system call table.
+    syscall[SYSCALL_YIELD] = sys_yield;
+    syscall[SYSCALL_CURSOR] = sys_move_cursor;
+    syscall[SYSCALL_WRITE] = sys_write;
+    syscall[SYSCALL_REFLUSH] = sys_reflush;
+    syscall[MUTEX_INIT] = sys_mutex_init;
+    syscall[MUTEX_ACQ] = sys_mutex_acquire;
+    syscall[MUTEX_RELEASE] = sys_mutex_release;
+    
 }
 /************************************************************/
 
