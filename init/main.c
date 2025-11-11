@@ -59,10 +59,10 @@ static void init_jmptab(void)
     jmptab[MUTEX_RELEASE]   = (long (*)())do_mutex_lock_release;
 
     // TODO: [p2-task1] (S-core) initialize system call table.
-    jmptab[SYSCALL_YIELD] = (long (*)())do_scheduler;
-    jmptab[SYSCALL_CURSOR] = (long (*)())screen_move_cursor;
-    jmptab[SYSCALL_WRITE] = (long (*)())screen_write;
-    jmptab[SYSCALL_REFLUSH] = (long (*)())screen_reflush;
+    // jmptab[SYSCALL_YIELD] = (long (*)())do_scheduler;
+    // jmptab[SYSCALL_CURSOR] = (long (*)())screen_move_cursor;
+    // jmptab[SYSCALL_WRITE] = (long (*)())screen_write;
+    // jmptab[SYSCALL_REFLUSH] = (long (*)())screen_reflush;
 }
 
 static void init_task_info(void)
@@ -95,7 +95,9 @@ static void init_pcb_stack(
       */
     regs_context_t *pt_regs =
         (regs_context_t *)(kernel_stack - sizeof(regs_context_t));
+    pt_regs->regs[1] = (reg_t)entry_point;   //ra
     pt_regs->regs[2] = (reg_t)user_stack;   //sp
+    pt_regs->regs[4] = (uint64_t)pcb;     //tp
     pt_regs->sepc = (reg_t)entry_point;
 
     //set sstatus
