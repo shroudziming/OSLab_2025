@@ -48,7 +48,7 @@ void check_sleeping(void)
             pcb->status = TASK_READY;
             pcb->wakeup_time = 0;
             
-            list_add(&pcb->list,&ready_queue);
+            list_add_tail(&pcb->list,&ready_queue);
         }
 
         current = next;
