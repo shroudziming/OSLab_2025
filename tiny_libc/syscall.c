@@ -63,7 +63,7 @@ int sys_mutex_init(int key)
     /* TODO: [p2-task2] call call_jmptab to implement sys_mutex_init */
     // return call_jmptab(MUTEX_INIT,(long)key, IGNORE, IGNORE, IGNORE, IGNORE);
     /* TODO: [p2-task3] call invoke_syscall to implement sys_mutex_init */
-    return invoke_syscall(MUTEX_INIT, (long)key, IGNORE, IGNORE, IGNORE, IGNORE);
+    return invoke_syscall(SYSCALL_LOCK_INIT, (long)key, IGNORE, IGNORE, IGNORE, IGNORE);
     // return 0;
 }
 
@@ -72,7 +72,7 @@ void sys_mutex_acquire(int mutex_idx)
     /* TODO: [p2-task2] call call_jmptab to implement sys_mutex_acquire */
     // call_jmptab(MUTEX_ACQ,(long)mutex_idx, IGNORE, IGNORE, IGNORE, IGNORE);
     /* TODO: [p2-task3] call invoke_syscall to implement sys_mutex_acquire */
-    invoke_syscall(MUTEX_ACQ, (long)mutex_idx, IGNORE, IGNORE, IGNORE, IGNORE);
+    invoke_syscall(SYSCALL_LOCK_ACQ, (long)mutex_idx, IGNORE, IGNORE, IGNORE, IGNORE);
 }
 
 void sys_mutex_release(int mutex_idx)
@@ -80,7 +80,7 @@ void sys_mutex_release(int mutex_idx)
     /* TODO: [p2-task2] call call_jmptab to implement sys_mutex_release */
     // call_jmptab(MUTEX_RELEASE,(long)mutex_idx, IGNORE, IGNORE, IGNORE, IGNORE);
     /* TODO: [p2-task3] call invoke_syscall to implement sys_mutex_release */
-    invoke_syscall(MUTEX_RELEASE, (long)mutex_idx, IGNORE, IGNORE, IGNORE, IGNORE);
+    invoke_syscall(SYSCALL_LOCK_RELEASE, (long)mutex_idx, IGNORE, IGNORE, IGNORE, IGNORE);
 }
 
 long sys_get_timebase(void)
