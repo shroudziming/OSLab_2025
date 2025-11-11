@@ -9,7 +9,19 @@ static long invoke_syscall(long sysno, long arg0, long arg1, long arg2,
                            long arg3, long arg4)
 {
     /* TODO: [p2-task3] implement invoke_syscall via inline assembly */
-    asm volatile("nop");
+    long ret;
+    asm volatile("mv a7, %[sysno]\n"
+                 "mv a0, %[arg0]\n"
+                 "mv a1, %[arg1]\n"
+                 "mv a2, %[arg2]\n"
+                 "mv a3, %[arg3]\n"
+                 "mv a4, %[arg4]\n"
+                 "ecall\n"
+                 "mv %[ret], a0\n"
+                 :[ret] "=r"(ret)
+                 :[sysno] "r"(sysno), [arg0] "r"(arg0), [arg1] "r"(arg1), [arg2] "r"(arg2), [arg3] "r"(arg3), [arg4] "r"(arg4)
+                 : "a0","a1","a2","a3","a4","a7","memory"
+    );
 
     return 0;
 }
