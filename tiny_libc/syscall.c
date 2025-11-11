@@ -23,7 +23,7 @@ static long invoke_syscall(long sysno, long arg0, long arg1, long arg2,
                  : "a0","a1","a2","a3","a4","a7","memory"
     );
 
-    return 0;
+    return ret;
 }
 
 void sys_yield(void)
