@@ -135,20 +135,20 @@ ENTRY(switch_to)
 
   /* TODO: [p2-task1] save all callee save registers on kernel stack,
    * see the definition of `struct switchto_context` in sched.h*/
-  sd ra, 0(sp)
-  sd sp, 8(sp)
-  sd s0, 16(sp)
-  sd s1, 24(sp)
-  sd s2, 32(sp)
-  sd s3, 40(sp)
-  sd s4, 48(sp)
-  sd s5, 56(sp)
-  sd s6, 64(sp)
-  sd s7, 72(sp)
-  sd s8, 80(sp)
-  sd s9, 88(sp)
-  sd s10, 96(sp)
-  sd s11, 104(sp)
+  sd ra, SWITCH_TO_RA(sp)
+  sd sp, SWITCH_TO_SP(sp)
+  sd s0, SWITCH_TO_S0(sp)
+  sd s1, SWITCH_TO_S1(sp)
+  sd s2, SWITCH_TO_S2(sp)
+  sd s3, SWITCH_TO_S3(sp)
+  sd s4, SWITCH_TO_S4(sp)
+  sd s5, SWITCH_TO_S5(sp)
+  sd s6, SWITCH_TO_S6(sp)
+  sd s7, SWITCH_TO_S7(sp)
+  sd s8, SWITCH_TO_S8(sp)
+  sd s9, SWITCH_TO_S9(sp)
+  sd s10, SWITCH_TO_S10(sp)
+  sd s11, SWITCH_TO_S11(sp)
 
   sd sp,0(a0) /* save current sp */
 
@@ -200,5 +200,6 @@ ENTRY(exception_handler_entry)
   csrr a1,stval   // sbadaddr
   csrr a2,scause  // scause
 
+  call interrupt_helper
 
 ENDPROC(exception_handler_entry)
