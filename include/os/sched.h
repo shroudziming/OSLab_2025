@@ -32,6 +32,9 @@
 #include <type.h>
 #include <os/list.h>
 
+#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+#define container_of(ptr,type,member) ((type *)((char *)(ptr) - offsetof(type,member)))
+
 #define NUM_MAX_TASK 16
 
 /* used to save register infomation */
