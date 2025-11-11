@@ -66,6 +66,7 @@ void do_sleep(uint32_t sleep_time)
     }
     current_running->wakeup_time = get_timer() + sleep_time;
     current_running->status = TASK_BLOCKED;
+    list_add_tail(&current_running->list, &sleep_queue);
     do_scheduler();
 }
 
