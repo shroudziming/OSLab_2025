@@ -100,8 +100,8 @@ static void init_pcb_stack(
 
     //set sstatus
     pt_regs->sstatus = 0;
-    pt_regs->sstatus &= (1 << 8);   //SPP,from user mode
-    pt_regs->sstatus |= (1 << 5);   //SPIE, enable interrupt
+    pt_regs->sstatus &= ~SR_SPP;   //SPP,from user mode
+    pt_regs->sstatus |= SR_SPIE;   //SPIE, enable interrupt
     
     pt_regs->scause = 0;
     pt_regs->sbadaddr = 0;
@@ -153,7 +153,7 @@ static void init_syscall(void)
     syscall[MUTEX_INIT] = sys_mutex_init;
     syscall[MUTEX_ACQ] = sys_mutex_acquire;
     syscall[MUTEX_RELEASE] = sys_mutex_release;
-    
+
 }
 /************************************************************/
 
