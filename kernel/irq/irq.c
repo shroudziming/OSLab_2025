@@ -14,6 +14,22 @@ void interrupt_helper(regs_context_t *regs, uint64_t stval, uint64_t scause)
 {
     // TODO: [p2-task3] & [p2-task4] interrupt handler.
     // call corresponding handler by the value of `scause`
+    if(scause & SCAUSE_IRQ_FLAG){
+        //interrupt
+        uint64_t interrupt_type = scause & ~SCAUSE_IRQ_FLAG;
+        if(interrupt_type < IRQC_COUNT && irq_table[interrupt_type]){
+            irq_table[interrupt_type](regs, stval, scause);
+        }else{
+            handle_other(regs, stval, scause);
+        }
+    }else{
+        //exception
+        if(scause < EXCC_COUNT && exc_table[scause]){
+            exc_table[scause](regs, stval, scause);
+        }else{
+            handle_other(regs, stval, scause);
+        }
+    }
 }
 
 void handle_irq_timer(regs_context_t *regs, uint64_t stval, uint64_t scause)
@@ -26,11 +42,19 @@ void init_exception()
 {
     /* TODO: [p2-task3] initialize exc_table */
     /* NOTE: handle_syscall, handle_other, etc.*/
-
+    for(int i = 0; i < EXCC_COUNT; i++)
+    {
+        exc_table[i] = handle_other;
+    }
+    exc_table[EXC_SYSCALL] = handle_syscall;
     /* TODO: [p2-task4] initialize irq_table */
     /* NOTE: handle_int, handle_other, etc.*/
-
+    for(int i = 0; i < IRQC_COUNT; i++){
+        irq_table[i] = handle_other;
+    }
+    irq_table[IRQC_S_TIMER] = handle_irq_timer;
     /* TODO: [p2-task3] set up the entrypoint of exceptions */
+    setup_exception();
 }
 
 void handle_other(regs_context_t *regs, uint64_t stval, uint64_t scause)
