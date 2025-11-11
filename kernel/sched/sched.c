@@ -61,6 +61,12 @@ void do_sleep(uint32_t sleep_time)
     // 1. block the current_running
     // 2. set the wake up time for the blocked task
     // 3. reschedule because the current_running is blocked.
+    if(sleep_time == 0){
+        return;
+    }
+    current_running->wakeup_time = get_timer() + sleep_time;
+    current_running->status = TASK_BLOCKED;
+    do_scheduler();
 }
 
 void do_block(list_node_t *pcb_node, list_head *queue)
