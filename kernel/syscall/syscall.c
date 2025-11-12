@@ -15,13 +15,8 @@ void handle_syscall(regs_context_t *regs, uint64_t interrupt, uint64_t cause)
     long arg2 = regs->regs[12];
     long arg3 = regs->regs[13];
     long arg4 = regs->regs[14];
-
-    long retval = -1;
     if(sysno >= 0 && sysno < NUM_SYSCALLS && syscall[sysno] != NULL){
-        retval = syscall[sysno](arg0, arg1, arg2, arg3, arg4);
+        regs->regs[10]= syscall[sysno](arg0, arg1, arg2, arg3, arg4);
     }
-
-    regs->regs[10] = retval;
-
     regs->sepc += 4;    //skip ecall
 }
