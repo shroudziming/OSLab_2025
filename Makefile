@@ -100,7 +100,9 @@ SRC_LIBC    = $(wildcard ./tiny_libc/*.c)
 OBJ_LIBC    = $(patsubst %.c, %.o, $(foreach file, $(SRC_LIBC), $(DIR_BUILD)/$(notdir $(file))))
 LIB_TINYC   = $(DIR_BUILD)/libtinyc.a
 
-SRC_USER    = $(wildcard $(DIR_TEST_PROJ)/*.c)
+# SRC_USER    = $(wildcard $(DIR_TEST_PROJ)/*.c)
+TASK1_TESTS = print1 print2 fly lock1 lock2 sleep timer
+SRC_USER    = $(foreach test,$(TASK1_TESTS),$(DIR_TEST_PROJ)/$(test).c)
 ELF_USER    = $(patsubst %.c, %, $(foreach file, $(SRC_USER), $(DIR_BUILD)/$(notdir $(file))))
 
 # -----------------------------------------------------------------------
