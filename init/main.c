@@ -190,10 +190,10 @@ int main(void)
 
     // TODO: [p2-task4] Setup timer interrupt and enable all interrupt globally
     // NOTE: The function of sstatus.sie is different from sie's
-    
+    bios_set_timer(get_ticks() + TIMER_INTERVAL);
 
-    bios_putstr("Hello OS!\n\r");
-    bios_putstr(buf);
+    // bios_putstr("Hello OS!\n\r");
+    // bios_putstr(buf);
     
     char input[MAX_INPUT_LEN];
     int len = 0;
@@ -251,7 +251,7 @@ int main(void)
                     }
                 }
             }else if (strcmp(input, "start") == 0) {
-                bios_putstr("Starting scheduling...\n\r");
+                bios_putstr("Starting scheduling...\n");
                 break;
             }else{
                 uint64_t entry = load_task_img(input);
@@ -311,11 +311,11 @@ int main(void)
     while (1)
     {
         // If you do non-preemptive scheduling, it's used to surrender control
-        do_scheduler();
+        // do_scheduler();
 
         // If you do preemptive scheduling, they're used to enable CSR_SIE and wfi
-        // enable_preempt();
-        // asm volatile("wfi");
+        enable_preempt();
+        asm volatile("wfi");
     }
 
     return 0;
