@@ -68,9 +68,9 @@ uint64_t load_task_img(char *taskname)
 		bios_putstr("[Error] Task not found.\n");
 		return -1;
 	}
-	bios_putstr("loading task ");
-	bios_putstr(tasks[idx].name);
-	bios_putstr("\n");
+	// bios_putstr("loading task ");
+	// bios_putstr(tasks[idx].name);
+	// bios_putstr("\n");
 
 	//bytes offset
 	uintptr_t mem_addr = APP_BASE + idx * APP_ADDR_INTERVAL;
@@ -89,7 +89,7 @@ uint64_t load_task_img(char *taskname)
 	memcpy((void *)mem_addr,sector_buf + sector_offset,size);
 
 	
-	bios_putstr("done.\n");
+	// bios_putstr("done.\n");
 	
 
     return mem_addr;
