@@ -33,7 +33,6 @@ void do_scheduler(void)
     // TODO: [p2-task1] Modify the current_running pointer.
     pcb_t *prev = current_running;
     pcb_t *next;
-
     if(prev->pid != 0 && prev->status == TASK_RUNNING){
         prev->status = TASK_READY;
         list_add_tail(&prev->list, &ready_queue);
@@ -58,14 +57,9 @@ void do_sleep(uint32_t sleep_time)
     // NOTE: you can assume: 1 second = 1 `timebase` ticks
     // 1. block the current_running
     // 2. set the wake up time for the blocked task
-    // 3. reschedule because the current_running is blocked.
-    if(sleep_time == 0){
-        return;
-    }
+    // 3. reschedule because the current_running is blocked.0
     current_running->wakeup_time = get_timer() + sleep_time;
-    current_running->status = TASK_BLOCKED;
-    list_add_tail(&current_running->list, &sleep_queue);
-    do_scheduler();
+    do_block(&current_running->list, &sleep_queue);
 }
 
 void do_block(list_node_t *pcb_node, list_head *queue)
