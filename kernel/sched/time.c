@@ -43,12 +43,8 @@ void check_sleeping(void)
         pcb_t *pcb = container_of(current,pcb_t,list);
 
         if(now >= pcb->wakeup_time){
-            list_del(current);
-
-            pcb->status = TASK_READY;
             pcb->wakeup_time = 0;
-            
-            list_add_tail(&pcb->list,&ready_queue);
+            do_unblock(current);
         }
 
         current = next;
