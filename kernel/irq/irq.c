@@ -53,15 +53,15 @@ void init_exception()
     exc_table[EXCC_STORE_PAGE_FAULT] = handle_other;
     /* TODO: [p2-task4] initialize irq_table */
     /* NOTE: handle_int, handle_other, etc.*/
-    // irq_table[IRQC_U_SOFT] = handle_other;
-    // irq_table[IRQC_S_SOFT] = handle_other;
-    // irq_table[IRQC_M_SOFT] = handle_other;
-    // irq_table[IRQC_U_TIMER] = handle_other;
-    // irq_table[IRQC_S_TIMER] = handle_irq_timer;
-    // irq_table[IRQC_M_TIMER] = handle_other;
-    // irq_table[IRQC_U_EXT] = handle_other;
-    // irq_table[IRQC_S_EXT] = handle_other;
-    // irq_table[IRQC_M_EXT] = handle_other;
+    irq_table[IRQC_U_SOFT] = handle_other;
+    irq_table[IRQC_S_SOFT] = handle_other;
+    irq_table[IRQC_M_SOFT] = handle_other;
+    irq_table[IRQC_U_TIMER] = handle_other;
+    irq_table[IRQC_S_TIMER] = handle_irq_timer;
+    irq_table[IRQC_M_TIMER] = handle_other;
+    irq_table[IRQC_U_EXT] = handle_other;
+    irq_table[IRQC_S_EXT] = handle_other;
+    irq_table[IRQC_M_EXT] = handle_other;
 
     /* TODO: [p2-task3] set up the entrypoint of exceptions */
     setup_exception();
