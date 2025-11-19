@@ -82,11 +82,36 @@ uint64_t load_task_img(char *taskname)
 	uint64_t end_sector = (offset + size + SECTOR_SIZE - 1) / SECTOR_SIZE;
 	uint64_t num_sectors = end_sector - start_sector;
 
-	static uint8_t sector_buf[SECTOR_SIZE * 15];
+	static uint8_t sector_buf[SECTOR_SIZE];		//single sector buffer
 
-	bios_sd_read((uintptr_t)sector_buf,num_sectors,start_sector);
+	uint64_t bytes_remaining = size;
+	uint64_t current_mem_addr = mem_addr;
+	uint64_t current_sector = start_sector;
+
+	while(bytes_remaining > 0 && current_sector < start_sector + num_sectors){
+		bios_sd_read((uintptr_t)sector_buf, 1,current_sector);
+
+		uint64_t bytes_to_copy;
+		uint64_t copy_offset;
+
+		if(current_sector == start_sector){
+			copy_offset = sector_offset;
+			bytes_to_copy = (SECTOR_SIZE - sector_offset) < bytes_remaining ? (SECTOR_SIZE - sector_offset) : bytes_remaining;
+		}else{
+			copy_offset = 0;
+			bytes_to_copy = SECTOR_SIZE < bytes_remaining ? SECTOR_SIZE : bytes_remaining;
+		}
+
+		memcpy((void *)current_mem_addr,sector_buf + copy_offset,bytes_to_copy);
+
+		current_mem_addr += bytes_to_copy;
+		current_sector++;
+		bytes_remaining -= bytes_to_copy;
+	}
+
+	// bios_sd_read((uintptr_t)sector_buf,num_sectors,start_sector);
 	
-	memcpy((void *)mem_addr,sector_buf + sector_offset,size);
+	// memcpy((void *)mem_addr,sector_buf + sector_offset,size);
 
 	
 	// bios_putstr("done.\n");
