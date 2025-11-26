@@ -47,6 +47,15 @@ void screen_write_ch(char ch)
     else if (ch == '\b' || ch == '\177')
     {	
         // TODO: [P3] support backspace here
+        if(current_running->cursor_x > 0){
+            current_running->cursor_x--;
+            new_screen[SCREEN_LOC(current_running->cursor_x, current_running->cursor_y)] = ' ';
+        }else{
+            if(current_running->cursor_y > 0){
+                current_running->cursor_y--;
+                current_running->cursor_x = SCREEN_WIDTH - 1;
+            }
+        }
     }
     else
     {
@@ -141,4 +150,9 @@ void screen_reflush(void)
 
     /* recover cursor position */
     vt100_move_cursor(current_running->cursor_x + 1, current_running->cursor_y + 1);
+}
+
+void screen_putchar(char ch){
+    screen_write_ch(ch);
+    screen_reflush();
 }
