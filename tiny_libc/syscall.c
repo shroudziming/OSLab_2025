@@ -152,6 +152,12 @@ int  sys_getchar(void)
     return (int)invoke_syscall(SYSCALL_READCH,IGNORE,IGNORE,IGNORE,IGNORE,IGNORE);
 }
 
+void sys_putchar(char ch)
+{
+    //added by myself
+    invoke_syscall(SYSCALL_PUTCHAR,IGNORE,IGNORE,IGNORE,IGNORE,IGNORE);
+}
+
 int  sys_barrier_init(int key, int goal)
 {
     /* TODO: [p3-task2] call invoke_syscall to implement sys_barrier_init */
