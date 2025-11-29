@@ -51,6 +51,7 @@ typedef struct mutex_lock
     pid_t owner;
 } mutex_lock_t;
 
+mutex_lock_t mlocks[LOCK_NUM];
 void init_locks(void);
 
 void spin_lock_init(spin_lock_t *lock);
