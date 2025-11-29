@@ -32,7 +32,7 @@ int spin_lock_try_acquire(spin_lock_t *lock)
     uint32_t old_val = UNLOCKED;
     uint32_t expected = LOCKED;
 
-    uint32_t ret = atomic_cmpxchg(old_val,expected,(ptr_t)&lock->status);
+    uint32_t ret = atomic_swap(expected,&(lock->status));
     if(ret == UNLOCKED){
         return 1;   //success
     }
@@ -50,7 +50,7 @@ void spin_lock_acquire(spin_lock_t *lock)
 void spin_lock_release(spin_lock_t *lock)
 {
     /* TODO: [p2-task2] release spin lock */
-    atomic_swap(UNLOCKED,(ptr_t)&lock->status);
+    lock->status = UNLOCKED;
 }
 
 int do_mutex_lock_init(int key)
@@ -142,4 +142,70 @@ void do_mutex_lock_release(int mlock_idx)
         mutex->owner = -1;
     }
     spin_lock_release(&mutex->lock);
+}
+
+
+//barrier
+
+void init_barriers(void){
+
+}
+
+int do_barrier_init(int key, int goal){
+
+}
+
+void do_barrier_wait(int bar_idx){
+
+}
+
+void do_barrier_destroy(int bar_idx){
+
+}
+
+//condition
+
+void init_conditions(void){
+    
+}
+int do_condition_init(int key){
+
+}
+
+void do_condition_wait(int cond_idx, int mutex_idx){
+
+}
+
+void do_condition_signal(int cond_idx){
+
+}
+
+void do_condition_broadcast(int cond_idx){
+
+}
+
+void do_condition_destroy(int cond_idx){
+
+}
+
+//mbox
+
+void init_mbox(){
+
+}
+
+int do_mbox_open(char *name){
+
+}
+
+void do_mbox_close(int mbox_idx){
+
+}
+
+int do_mbox_send(int mbox_idx, void * msg, int msg_length){
+
+}
+
+int do_mbox_recv(int mbox_idx, void * msg, int msg_length){
+    
 }
