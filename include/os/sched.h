@@ -107,9 +107,15 @@ extern pcb_t pcb[NUM_MAX_TASK];
 extern pcb_t pid0_pcb;
 extern const ptr_t pid0_stack;
 
+extern void init_pcb_stack(ptr_t kernel_stack, ptr_t user_stack, ptr_t entry_point,pcb_t *pcb,int argc, char *argv[]);
+
 extern void switch_to(pcb_t *prev, pcb_t *next);
 void do_scheduler(void);
 void do_sleep(uint32_t);
+
+void release_pcb(pcb_t *pcb);
+void free_block_list(list_head *list);
+void release_all_lock(pid_t pid);
 
 void do_block(list_node_t *, list_head *queue);
 void do_unblock(list_node_t *);
