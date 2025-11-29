@@ -116,6 +116,7 @@ void do_sleep(uint32_t);
 void release_pcb(pcb_t *pcb);
 void free_block_list(list_head *list);
 void release_all_lock(pid_t pid);
+pcb_t *get_pcb_by_pid(pid_t pid);
 
 void do_block(list_node_t *, list_head *queue);
 void do_unblock(list_node_t *);
