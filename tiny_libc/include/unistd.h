@@ -9,6 +9,7 @@ void sys_sleep(uint32_t time);
 void sys_yield(void);
 void sys_write(char *buff);
 void sys_move_cursor(int x, int y);
+void sys_clear(void);
 void sys_reflush(void);
 long sys_get_timebase(void);
 long sys_get_tick(void);
@@ -20,7 +21,7 @@ void sys_mutex_release(int mutex_idx);
 /* TODO: [P3 task1] ps, getchar */
 void sys_ps(void);
 int  sys_getchar(void);
-
+void sys_putchar(char c);
 /* TODO: [P3 task1] exec, exit, kill waitpid */
 // S-core
 // pid_t  sys_exec(int id, int argc, uint64_t arg0, uint64_t arg1, uint64_t arg2);
