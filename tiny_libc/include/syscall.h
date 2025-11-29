@@ -37,4 +37,5 @@
 #define SYSCALL_MBOX_SEND 54
 #define SYSCALL_MBOX_RECV 55
 
+#define SYSCALL_PUTCHAR 60
 #endif
