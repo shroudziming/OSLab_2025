@@ -2,11 +2,16 @@
 #include <os/lock.h>
 #include <os/sched.h>
 #include <os/time.h>
+#include <os/loader.h>
+#include <os/string.h>
 #include <os/mm.h>
 #include <screen.h>
 #include <printk.h>
 #include <assert.h>
 
+extern uint16_t kernel_sectors;
+extern uint16_t tasknum;
+extern uint32_t table_offset;
 
 pcb_t pcb[NUM_MAX_TASK];
 const ptr_t pid0_stack = INIT_KERNEL_STACK + PAGE_SIZE;
@@ -43,6 +48,7 @@ void do_scheduler(void)
         list_del(next_node);
         next = container_of(next_node, pcb_t, list);
         next->status = TASK_RUNNING;
+        screen_move_cursor(next->cursor_x, next->cursor_y);
     } else{
         next = &pid0_pcb;
     }
@@ -89,4 +95,139 @@ void do_unblock(list_node_t *pcb_node)
     list_del(pcb_node);
     list_add_tail(pcb_node, &ready_queue);
     
+}
+
+pid_t do_exec(char *name, int argc, char *argv[]){
+    uint64_t entry = load_task_img(name);
+    pid_t pid = -1;
+    if(entry == -1){
+        printk("Failed to load task %s\n",name);
+        return -1;
+    }else{
+        int slot = -1;
+        for(int j = 0; j < tasknum; j++){
+            if(pcb[j].status == TASK_EXITED || pcb[j].pid == -1){
+                slot = j;
+                break;
+            }
+        }
+        if(slot == -1){
+            printk("No available slot for shell\n");
+        }else{
+            pcb_t *p = &pcb[slot];
+            p->pid = process_id;
+            p->status = TASK_READY;
+            p->wakeup_time = 0;
+            p->cursor_x = 0;
+            p->cursor_y = 0;
+            p->kernel_sp = (reg_t)(allocKernelPage(1) + PAGE_SIZE);
+            p->user_sp = (reg_t)(allocUserPage(1) + PAGE_SIZE);
+            uint64_t user_sp = p->user_sp;
+            user_sp -= sizeof(char *) * argc;
+            char **argv_ptr = (char **)user_sp;
+            for(int i = argc - 1;i >= 0;i--){
+                int len = strlen(argv[i]) + 1;
+                user_sp -= len;
+                argv_ptr[i] = (char *)user_sp;
+                strcpy((char *)user_sp, argv[i]);
+            }
+            p->user_sp = (reg_t)ROUNDDOWN(user_sp,128);     // align to 128
+            init_pcb_stack(p->kernel_sp, p->user_sp, (ptr_t)entry, p,argc, argv_ptr);
+            list_add_tail(&p->list, &ready_queue);
+            process_id++;
+            pid = p->pid;
+        }
+    }
+    return pid;
+
+}
+
+void release_pcb(pcb_t *p){
+    if(p == NULL) return;
+
+    p->status = TASK_EXITED;
+    list_del(&p->list);
+    if(!list_empty(&p->wait_list)){
+        free_block_list(&p->wait_list);
+    }
+
+    release_all_lock(p->pid);
+
+}
+
+void free_block_list(list_head *list){
+    list_node_t *p, *next;
+    for(p = list->next; p != list; p = next){
+        next = p->next;
+        do_unblock(p);
+    }
+}
+
+void release_all_lock(pid_t pid){
+    for(int i = 0; i < LOCK_NUM; i++){
+        if(mlocks[i].owner == pid && mlocks[i].locked == 1){
+            do_mutex_lock_release(i);
+        }
+    }
+}
+
+void do_exit(void){
+    current_running->status = TASK_EXITED;
+    release_pcb(current_running);
+    do_scheduler();
+}
+
+int do_kill(pid_t pid){
+    pcb_t *p = get_pcb_by_pid(pid);
+    if(p == NULL){
+        return 0;   //failed
+    }
+    p->status = TASK_EXITED;
+
+    release_pcb(p);
+
+    list_del(&p->list);
+
+    return 1;   //success
+}
+
+int do_waitpid(pid_t pid){
+    pcb_t *p = get_pcb_by_pid(pid);
+
+    if(p == NULL){
+        return 0;   //failed
+    }
+    if(p->status != TASK_EXITED){
+        do_block(&current_running->list, &p->wait_list);
+        return p->pid;
+    }else{
+        return 0;
+    }
+}
+
+void do_process_show(void){
+    int i = 0;
+    static char *status[] = {"TASK_RUNNING","TASK_READY","TASK_BLOCKED","TASK_EXITED"};
+    screen_write("[Process Table]\n");
+    for(i = 0;i < tasknum;i++){
+        if(pcb[i].status == TASK_EXITED || pcb[i].pid == -1) continue;
+        else if(pcb[i].status == TASK_RUNNING){
+            printk("[%d] PID: %d STATUS: %s\n",i,pcb[i].pid,status[pcb[i].status]);
+        }
+    }
+}
+
+pid_t do_getpid(){
+    return current_running->pid;
+}
+
+pcb_t *get_pcb_by_pid(pid_t pid){
+    pcb_t *p;
+    for(int i = 0; i < tasknum; i++){
+        p = &pcb[i];
+        if(p->pid == pid){
+            return p;
+        }
+    }
+    return NULL;
 }
