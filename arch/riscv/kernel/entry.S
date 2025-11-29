@@ -120,7 +120,7 @@
 
 ENTRY(enable_preempt)
   not t0, x0
-  csrs CSR_SIE, t0
+  csrs CSR_SIE, t0 
   jr ra
 ENDPROC(enable_preempt)
 
