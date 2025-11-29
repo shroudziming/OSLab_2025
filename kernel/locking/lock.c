@@ -29,7 +29,6 @@ void spin_lock_init(spin_lock_t *lock)
 int spin_lock_try_acquire(spin_lock_t *lock)
 {
     /* TODO: [p2-task2] try to acquire spin lock */
-    uint32_t old_val = UNLOCKED;
     uint32_t expected = LOCKED;
 
     uint32_t ret = atomic_swap(expected,(ptr_t)&(lock->status));
