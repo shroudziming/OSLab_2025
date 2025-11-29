@@ -42,6 +42,10 @@ void sys_move_cursor(int x, int y)
     invoke_syscall(SYSCALL_CURSOR, (long)x, (long)y, IGNORE, IGNORE, IGNORE);
 }
 
+void sys_clear(void)
+{
+    invoke_syscall(SYSCALL_CLEAR,IGNORE,IGNORE,IGNORE,IGNORE,IGNORE);
+}
 void sys_write(char *buff)
 {
     /* TODO: [p2-task1] call call_jmptab to implement sys_write */
@@ -155,7 +159,7 @@ int  sys_getchar(void)
 void sys_putchar(char ch)
 {
     //added by myself
-    invoke_syscall(SYSCALL_PUTCHAR,IGNORE,IGNORE,IGNORE,IGNORE,IGNORE);
+    invoke_syscall(SYSCALL_PUTCHAR,(long)ch,IGNORE,IGNORE,IGNORE,IGNORE);
 }
 
 int  sys_barrier_init(int key, int goal)
