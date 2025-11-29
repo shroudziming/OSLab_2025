@@ -32,7 +32,7 @@ int spin_lock_try_acquire(spin_lock_t *lock)
     uint32_t old_val = UNLOCKED;
     uint32_t expected = LOCKED;
 
-    uint32_t ret = atomic_swap(expected,&(lock->status));
+    uint32_t ret = atomic_swap(expected,(ptr_t)&(lock->status));
     if(ret == UNLOCKED){
         return 1;   //success
     }
