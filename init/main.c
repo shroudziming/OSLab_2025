@@ -131,7 +131,7 @@ static void init_pcb(void)
     init_list_head(&sleep_queue);
 
     int i;
-    for(i=0;i<tasknum;i++){
+    for(i=0;i<NUM_MAX_TASK;i++){
         pcb[i].pid = -1;
         pcb[i].status = TASK_EXITED;
         init_list_head(&pcb[i].wait_list);
