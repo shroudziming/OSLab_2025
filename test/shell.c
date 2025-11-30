@@ -77,7 +77,7 @@ int main(void)
         }else if(temp == '\n' || temp == '\r'){
             if(input_buffer_index == 0){
                 sys_putchar('\n');
-                printf("> root@UCAS_OS: ");
+                // printf("> root@UCAS_OS: ");
                 continue;
             }
             input_buffer[input_buffer_index] = '\0';
@@ -155,8 +155,6 @@ void handle_shell_command(char *input){
         shell_clear();
     else if(strcmp("waitpid", args[0])==0)
         shell_waitpid();
-    // else if(strcmp("taskset", args[0])==0)
-    //     shell_taskset();
     else
         shell_unknown();
 }
@@ -165,12 +163,12 @@ void shell_ps(){
 }
 
 void shell_exec(int argc){
-    int wait = strcmp("&", args[argc])==0;
+    int wait = strcmp("&", args[argc]);
     pid_t pid = sys_exec(args[1], argc - (wait ? 0: 1), arg_ptr + 1);
-    if(pid == 0){
-        printf("exec failed\n");
+    if(pid == -1){
+        printf("\nexec failed\n");
     }else{
-        printf("execute %s success,pid = %d\n",args[1],pid);
+        printf("\nInfo: Execute %s success,pid = %d\n",args[1],pid);
         if(wait){
             sys_waitpid(pid);
         }
@@ -180,24 +178,23 @@ void shell_exec(int argc){
 void shell_kill(){
     int pid = atoi(args[1]);
     if(sys_kill(pid) == 0){
-        printf("can not find process with pid %d\n",pid);
+        printf("\nInfo: can not find process with pid %d\n",pid);
     }else{
-        printf("kill %d success\n",pid);
+        printf("\nInfo: kill %d success\n",pid);
     }
 }
 
 void shell_waitpid(){
     int pid = atoi(args[1]);
     if(sys_waitpid(pid) == 0){
-        printf("can not find process with pid %d\n",pid);
+        printf("\nInfo: can not find process with pid %d\n",pid);
     }else{
-        printf("Excute waitpid success, pid = %d\n",pid);
+        printf("\nInfo: excute waitpid success, pid = %d\n",pid);
     }
 }
 
 void shell_unknown(){
-    printf("\n");
-    printf("[Error] Unknown command! %s\n",args[0]);
+    printf("\nInfo: Unknown command! %s\n",args[0]);
 }
 
 
