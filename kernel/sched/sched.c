@@ -241,5 +241,5 @@ pcb_t *get_pcb_by_node(list_node_t *node){
             return &pcb[i];
         }
     }
-    return &pid0_pcb;
+    return NULL;
 }
