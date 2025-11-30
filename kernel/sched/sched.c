@@ -37,24 +37,26 @@ void do_scheduler(void)
 
     // TODO: [p2-task1] Modify the current_running pointer.
     pcb_t *prev = current_running;
-    pcb_t *next;
-    if(prev->pid != 0 && prev->status == TASK_RUNNING){
+    if(current_running->pid != 0 && current_running->pid != -1){
+        if(prev->status == TASK_RUNNING){
+            prev->status = TASK_READY;
+            list_add_tail(&prev->list, &ready_queue);
+        }else if(prev->status == TASK_EXITED){
+            release_pcb(prev);
+        }
+    }else{
         prev->status = TASK_READY;
-        list_add_tail(&prev->list, &ready_queue);
     }
-
     if(!list_empty(&ready_queue)){
         list_node_t *next_node = ready_queue.next;
+        current_running = get_pcb_by_node(next_node);
         list_del(next_node);
-        next = container_of(next_node, pcb_t, list);
-        next->status = TASK_RUNNING;
-        screen_move_cursor(next->cursor_x, next->cursor_y);
-    } else{
-        next = &pid0_pcb;
     }
+    current_running->status = TASK_RUNNING;
+    screen_move_cursor(current_running->cursor_x, current_running->cursor_y);
 
     // TODO: [p2-task1] switch_to current_running
-    switch_to(prev, next);
+    switch_to(prev, current_running);
 }
 
 void do_sleep(uint32_t sleep_time)
@@ -105,19 +107,18 @@ pid_t do_exec(char *name, int argc, char *argv[]){
         return -1;
     }else{
         int slot = -1;
-        for(int j = 0; j < tasknum; j++){
-            if(pcb[j].status == TASK_EXITED || pcb[j].pid == -1){
+        for(int j = 0; j < NUM_MAX_TASK; j++){
+            if(pcb[j].status == TASK_EXITED && pcb[j].pid == -1){
                 slot = j;
                 break;
             }
         }
         if(slot == -1){
-            printk("No available slot for shell\n");
+            printk("No available slot\n");
         }else{
             pcb_t *p = &pcb[slot];
             p->pid = process_id;
             p->status = TASK_READY;
-            p->wakeup_time = 0;
             p->cursor_x = 0;
             p->cursor_y = 0;
             p->kernel_sp = (reg_t)(allocKernelPage(1) + PAGE_SIZE);
@@ -146,6 +147,7 @@ void release_pcb(pcb_t *p){
     if(p == NULL) return;
 
     p->status = TASK_EXITED;
+    p->pid = -1;
     list_del(&p->list);
     if(!list_empty(&p->wait_list)){
         free_block_list(&p->wait_list);
@@ -173,7 +175,6 @@ void release_all_lock(pid_t pid){
 
 void do_exit(void){
     current_running->status = TASK_EXITED;
-    release_pcb(current_running);
     do_scheduler();
 }
 
@@ -182,11 +183,13 @@ int do_kill(pid_t pid){
     if(p == NULL){
         return 0;   //failed
     }
+    if(current_running->pid == pid){
+        do_exit();
+        return 1;
+    }
     p->status = TASK_EXITED;
 
     release_pcb(p);
-
-    list_del(&p->list);
 
     return 1;   //success
 }
@@ -201,17 +204,17 @@ int do_waitpid(pid_t pid){
         do_block(&current_running->list, &p->wait_list);
         return p->pid;
     }else{
-        return 0;
+        return p->pid;
     }
 }
 
 void do_process_show(void){
     int i = 0;
-    static char *status[] = {"TASK_RUNNING","TASK_READY","TASK_BLOCKED","TASK_EXITED"};
-    screen_write("[Process Table]\n");
-    for(i = 0;i < tasknum;i++){
-        if(pcb[i].status == TASK_EXITED || pcb[i].pid == -1) continue;
-        else if(pcb[i].status == TASK_RUNNING){
+    static char *status[] = {"BLOCKED","RUNNING","READY","EXITED"};
+    printk("\n[Process Table]\n");
+    for(i = 0;i < NUM_MAX_TASK;i++){
+        if(pcb[i].status == TASK_EXITED && pcb[i].pid == -1) continue;
+        else{
             printk("[%d] PID: %d STATUS: %s\n",i,pcb[i].pid,status[pcb[i].status]);
         }
     }
@@ -223,11 +226,20 @@ pid_t do_getpid(){
 
 pcb_t *get_pcb_by_pid(pid_t pid){
     pcb_t *p;
-    for(int i = 0; i < tasknum; i++){
+    for(int i = 0; i < NUM_MAX_TASK; i++){
         p = &pcb[i];
         if(p->pid == pid){
             return p;
         }
     }
     return NULL;
+}
+
+pcb_t *get_pcb_by_node(list_node_t *node){
+    for(int i = 0; i < NUM_MAX_TASK; i++){
+        if(&pcb[i].list == node){
+            return &pcb[i];
+        }
+    }
+    return &pid0_pcb;
 }
