@@ -118,18 +118,28 @@ void do_semaphore_down(int sema_idx);
 void do_semaphore_destroy(int sema_idx);
 
 #define MAX_MBOX_LENGTH (64)
-
+#define NAME_LEN 32
 typedef struct mailbox
 {
     // TODO [P3-TASK2 mailbox]
+    char name[NAME_LEN];
+    char msg[MAX_MBOX_LENGTH + 1];
+    int wp;
+    int rp;
+    int count;
+    list_head wait_full_queue;  //process wait because of full
+    list_head wait_empty_queue; //process wait because of empty
 } mailbox_t;
 
 #define MBOX_NUM 16
+extern mailbox_t mailboxes[MBOX_NUM];
 void init_mbox();
 int do_mbox_open(char *name);
 void do_mbox_close(int mbox_idx);
 int do_mbox_send(int mbox_idx, void * msg, int msg_length);
 int do_mbox_recv(int mbox_idx, void * msg, int msg_length);
+
+void circle_copy(char *dst, char *src, int dst_idx, int len, int mode);
 
 /************************************************************/
 
