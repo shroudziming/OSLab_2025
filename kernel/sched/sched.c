@@ -44,14 +44,9 @@ void do_scheduler(void)
         }else if(prev->status == TASK_EXITED){
             release_pcb(prev);
         }
-    }else{
-        prev->status = TASK_READY;
     }
-    if(!list_empty(&ready_queue)){
-        list_node_t *next_node = ready_queue.next;
-        current_running = get_pcb_by_node(next_node);
-        list_del(next_node);
-    }
+    list_node_t *temp = get_ready_node();
+    current_running = get_pcb_by_node(temp);
     current_running->status = TASK_RUNNING;
     screen_move_cursor(current_running->cursor_x, current_running->cursor_y);
 
@@ -67,36 +62,41 @@ void do_sleep(uint32_t sleep_time)
     // 2. set the wake up time for the blocked task
     // 3. reschedule because the current_running is blocked.0
     current_running->wakeup_time = get_timer() + sleep_time;
+    
     do_block(&current_running->list, &sleep_queue);
 }
 
 void do_block(list_node_t *pcb_node, list_head *queue)
 {
     // TODO: [p2-task2] block the pcb task into the block queue
-    pcb_t *pcb = container_of(pcb_node, pcb_t, list);
+    pcb_t *pcb = get_pcb_by_node(pcb_node);
 
     pcb->status = TASK_BLOCKED;
-    if(!list_empty(&ready_queue)){
-        list_del(pcb_node);
-    }
 
     list_add_tail(pcb_node, queue);
-    if(current_running == pcb){
-        do_scheduler();
-    }
+    do_scheduler();
 }
 
 void do_unblock(list_node_t *pcb_node)
 {
     // TODO: [p2-task2] unblock the `pcb` from the block queue
-
-    pcb_t *pcb = container_of(pcb_node, pcb_t, list);
+    list_del(pcb_node);
+    pcb_t *pcb = get_pcb_by_node(pcb_node);
 
     pcb->status = TASK_READY;
 
-    list_del(pcb_node);
+    
     list_add_tail(pcb_node, &ready_queue);
     
+}
+
+list_node_t *get_ready_node(){
+    list_node_t *temp = ready_queue.next;
+    if(temp == &ready_queue){
+        return &pid0_pcb.list;
+    }
+    list_del(temp);
+    return temp;
 }
 
 pid_t do_exec(char *name, int argc, char *argv[]){
@@ -123,6 +123,7 @@ pid_t do_exec(char *name, int argc, char *argv[]){
             p->cursor_y = 0;
             p->kernel_sp = (reg_t)(allocKernelPage(1) + PAGE_SIZE);
             p->user_sp = (reg_t)(allocUserPage(1) + PAGE_SIZE);
+            p->list.prev = p->list.next = NULL;
             uint64_t user_sp = p->user_sp;
             user_sp -= sizeof(char *) * argc;
             char **argv_ptr = (char **)user_sp;
