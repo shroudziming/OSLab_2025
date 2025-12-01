@@ -31,7 +31,7 @@
 
 #include <type.h>
 #include <os/list.h>
-
+#include <os/smp.h>
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 #define container_of(ptr,type,member) ((type *)((char *)(ptr) - offsetof(type,member)))
 
@@ -91,6 +91,8 @@ typedef struct pcb
     /* time(seconds) to wake up sleeping PCB */
     uint64_t wakeup_time;
 
+    //running on which cpu
+    uint64_t run_cpu_id;
 } pcb_t;
 
 /* ready queue to run */
@@ -100,7 +102,7 @@ extern list_head ready_queue;
 extern list_head sleep_queue;
 
 /* current running task PCB */
-register pcb_t * current_running asm("tp");
+extern volatile pcb_t *current_running[NR_CPUS];
 extern pid_t process_id;
 
 extern pcb_t pcb[NUM_MAX_TASK];
