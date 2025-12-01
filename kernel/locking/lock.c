@@ -1,12 +1,13 @@
 #include <os/lock.h>
 #include <os/sched.h>
 #include <os/list.h>
+#include <os/string.h>
 #include <atomic.h>
 #include <assert.h>
 mutex_lock_t mlocks[LOCK_NUM];
 condition_t conditions[CONDITION_NUM];
 barrier_t barriers[BARRIER_NUM];
-
+mailbox_t mailboxes[MBOX_NUM];
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 #define container_of(ptr,type,member) ((type *)((char *)(ptr) - offsetof(type,member)))
 
@@ -85,64 +86,32 @@ int do_mutex_lock_init(int key)
 void do_mutex_lock_acquire(int mlock_idx)
 {
     /* TODO: [p2-task2] acquire mutex lock */
-    if(mlock_idx < 0 || mlock_idx >= LOCK_NUM){
+    if(spin_lock_try_acquire(&mlocks[mlock_idx].lock) == 0){
+        mlocks[mlock_idx].owner = current_running->pid;
+        mlocks[mlock_idx].locked = 1;
         return;
     }
-    mutex_lock_t *mutex = &mlocks[mlock_idx];
 
-    spin_lock_acquire(&mutex->lock);
-
-    // if(!list_empty(&mutex->block_queue)){
-    //     do_block(&current_running->list, &mutex->block_queue);
-    //     spin_lock_release(&mutex->lock);
-    // }else{
-    //     list_add_tail(&current_running->list, &mutex->block_queue);
-    //     spin_lock_release(&mutex->lock);
-    // }
-
-    if (mutex->locked) {
-        // 锁被占用，加入等待队列并阻塞
-        list_add_tail(&current_running->list, &mutex->block_queue);
-        
-        spin_lock_release(&mutex->lock);
-
-        do_block(&current_running->list, &mutex->block_queue);
-    } else {
-        // 锁空闲，获得锁
-        mutex->locked = 1;
-        mutex->owner = current_running->pid;
-        spin_lock_release(&mutex->lock);
-    }
+    do_block(&current_running->list,&mlocks[mlock_idx].block_queue);
 }
 
 void do_mutex_lock_release(int mlock_idx)
 {
     /* TODO: [p2-task2] release mutex lock */
-    if(mlock_idx < 0 || mlock_idx >= LOCK_NUM){
-        return;
-    }
     mutex_lock_t *mutex = &mlocks[mlock_idx];
-
-    spin_lock_acquire(&mutex->lock);
-
     if(!list_empty(&mutex->block_queue)){
-        //取出第一个等待者
-        list_node_t *next_wait = mutex->block_queue.next;
-        pcb_t *next_pcb = container_of(next_wait, pcb_t, list);
-
-        if(next_pcb != NULL && next_pcb->status == TASK_BLOCKED){
-            mutex->owner = next_pcb->pid;
-            mutex->locked = 1;
-            do_unblock(next_wait);
-        } else {
-            mutex->locked = 0;
-            mutex->owner = -1;
-        }
+        //not empty
+        list_node_t *node = mutex->block_queue.next;
+        pcb_t *p = get_pcb_by_node(node);
+        mutex->owner = p->pid;
+        do_unblock(node);
+        
     }else {
         mutex->locked = 0;
         mutex->owner = -1;
+        spin_lock_release(&mutex->lock);
     }
-    spin_lock_release(&mutex->lock);
+    
 }
 
 
@@ -238,11 +207,13 @@ int do_condition_init(int key){
 }
 
 void do_condition_wait(int cond_idx, int mutex_idx){
-    assert(mlocks[mutex_idx].locked && mlocks[mutex_idx].owner == current_running->pid);
-    condition_t *condition = &conditions[cond_idx];
-
+    if (cond_idx < 0 || cond_idx >= CONDITION_NUM || 
+        mutex_idx < 0 || mutex_idx >= LOCK_NUM) {
+        return;
+    }
+    
     current_running->status = TASK_BLOCKED;
-    list_add_tail(&current_running->list, &condition->wait_queue);
+    list_add_tail(&current_running->list,&conditions[cond_idx].wait_queue);
     do_mutex_lock_release(mutex_idx);
     do_scheduler();
 
@@ -260,11 +231,7 @@ void do_condition_signal(int cond_idx){
 
 void do_condition_broadcast(int cond_idx){
     condition_t *condition = &conditions[cond_idx];
-    list_node_t *next_wait = condition->wait_queue.next;
-    while(next_wait != &condition->wait_queue){
-        do_unblock(next_wait);
-        next_wait = next_wait->next;
-    }
+    free_block_list(&condition->wait_queue);
 }
 
 void do_condition_destroy(int cond_idx){
@@ -277,21 +244,91 @@ void do_condition_destroy(int cond_idx){
 //mbox
 
 void init_mbox(){
-
+    for(int i = 0;i < MBOX_NUM;i++){
+        mailboxes[i].name[0] = '\0';
+        mailboxes[i].wp =0;
+        mailboxes[i].rp = 0;
+        mailboxes[i].count = 0;
+        mailboxes[i].wait_empty_queue.prev = &mailboxes[i].wait_empty_queue;
+        mailboxes[i].wait_empty_queue.next = &mailboxes[i].wait_empty_queue;
+        mailboxes[i].wait_full_queue.prev = &mailboxes[i].wait_full_queue;
+        mailboxes[i].wait_full_queue.next = &mailboxes[i].wait_full_queue;
+    }
 }
 
 int do_mbox_open(char *name){
-
+    for(int i = 0;i < MBOX_NUM;i++){
+        if(strcmp(mailboxes[i].name,name) == 0){
+            mailboxes[i].count++;
+            return i;
+        }
+    }
+    //return a new mailbox
+    for(int i = 0;i < MBOX_NUM;i++){
+        if(mailboxes[i].name[0] == '\0'){
+            strcpy(mailboxes[i].name,name);
+            mailboxes[i].count++;
+            return i;
+        }
+    }
+    return -1;
 }
 
 void do_mbox_close(int mbox_idx){
-
+    mailboxes[mbox_idx].count--;
+    if(mailboxes[mbox_idx].count == 0){
+        mailboxes[mbox_idx].name[0] = '\0';
+        mailboxes[mbox_idx].wp = 0;
+        mailboxes[mbox_idx].rp = 0;
+    }
 }
 
 int do_mbox_send(int mbox_idx, void * msg, int msg_length){
+    int temp_w;
+    int count = 0;
+    //if full
+    while((temp_w = mailboxes[mbox_idx].wp + msg_length) > MAX_MBOX_LENGTH + mailboxes[mbox_idx].rp){
+        
+        do_block(&current_running->list, &mailboxes[mbox_idx].wait_full_queue);
+        count++;
+    }
+    
+    circle_copy(mailboxes[mbox_idx].msg,msg,mailboxes[mbox_idx].wp,msg_length,1);
+    mailboxes[mbox_idx].wp = temp_w;
+    free_block_list(&mailboxes[mbox_idx].wait_empty_queue); //release processes waiting for msgs
 
+    return count;
 }
 
 int do_mbox_recv(int mbox_idx, void * msg, int msg_length){
-    
+    int temp_r;
+    int count = 0;
+    //if empty
+    while((temp_r = mailboxes[mbox_idx].rp + msg_length) > mailboxes[mbox_idx].wp){
+        
+        do_block(&current_running->list, &mailboxes[mbox_idx].wait_empty_queue);
+        count++;
+    }
+    circle_copy(msg,mailboxes[mbox_idx].msg,mailboxes[mbox_idx].rp,msg_length,0);
+    mailboxes[mbox_idx].rp = temp_r;
+    free_block_list(&mailboxes[mbox_idx].wait_full_queue); //release processes waiting for space
+
+    return count;
+}
+
+void circle_copy(char *dst, char *src, int dst_idx, int len, int mode){
+    //mode = 1 means write
+    //mode = 0 means read
+    int real_idx;
+    if(mode == 1){
+        for(int i = 0;i < len;i++){
+            real_idx = (dst_idx + i) % MAX_MBOX_LENGTH;
+            dst[real_idx] = src[i];     //mailbox <- msg
+        }
+    }else{
+        for(int i = 0;i < len;i++){
+            real_idx = (dst_idx + i) % MAX_MBOX_LENGTH;
+            dst[i] = src[real_idx];     //msg <- mailbox
+        }
+    }
 }
