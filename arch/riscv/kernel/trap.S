@@ -6,6 +6,8 @@ ENTRY(setup_exception)
   /* TODO: [p2-task3] save exception_handler_entry into STVEC */
   la t0, exception_handler_entry
   csrw stvec, t0
+
+  csrw sip,zero   //clear sip to avoid software interrupt
   /* TODO: [p2-task4] enable interrupts globally */
   # li t0,SR_SIE  //全局中断使能
   # csrs sstatus, t0
