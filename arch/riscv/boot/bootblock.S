@@ -46,6 +46,17 @@ secondary:
 	 * 2. let stvec pointer to kernel_main
 	 * 3. enable software interrupt for ipi
 	 */
+	 //disable all interrupts
+	 li t0,SR_SIE
+	 csrc sstatus, t0
+	 //stvec -> kernel main
+	 la t0, kernel
+	 csrw stvec, t0
+	 //enable software interrupt
+	 li t0,SIE_SSIE
+	 csrs sie,t0
+	 li t0,SR_SIE
+	 csrs sstatus, t0
 
 wait_for_wakeup:
 	wfi
