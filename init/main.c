@@ -146,6 +146,7 @@ static void init_pcb(void)
     s_pid0_pcb.status = TASK_READY;
     init_list_head(&s_pid0_pcb.list);
     init_pcb_stack(pid0_pcb.kernel_sp, pid0_pcb.user_sp, (uint64_t)ret_from_exception, &pid0_pcb,0,NULL);
+    init_pcb_stack(s_pid0_pcb.kernel_sp, s_pid0_pcb.user_sp, (uint64_t)ret_from_exception, &s_pid0_pcb,0,NULL);
     current_running[0] = &pid0_pcb;
     current_running[1] = &s_pid0_pcb;
 }
@@ -198,9 +199,9 @@ int main(void)
     tasknum        = *(uint16_t*)TASKNUM_ADDR;
     table_offset   = *(uint32_t*)TABLE_OFFSET_ADDR;
 
-    cpu_id = get_current_cpu_id();
+    int cid = get_current_cpu_id();
 
-    if(cpu_id == 0){
+    if(cid == 0){
         smp_init();
 
         lock_kernel();
@@ -249,6 +250,7 @@ int main(void)
         wakeup_other_hart();
 
         lock_kernel();  //re grab the lock
+        cpu_id = 0;
     }else{
         lock_kernel();
         cpu_id = 1;
