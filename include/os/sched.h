@@ -109,6 +109,9 @@ extern pcb_t pcb[NUM_MAX_TASK];
 extern pcb_t pid0_pcb;
 extern const ptr_t pid0_stack;
 
+extern pcb_t s_pid0_pcb;
+extern const ptr_t s_pid0_stack;
+
 extern void init_pcb_stack(ptr_t kernel_stack, ptr_t user_stack, ptr_t entry_point,pcb_t *pcb,int argc, char *argv[]);
 
 extern void switch_to(pcb_t *prev, pcb_t *next);
