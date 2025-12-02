@@ -5,6 +5,7 @@
 #include <os/loader.h>
 #include <os/string.h>
 #include <os/mm.h>
+#include <os/smp.h>
 #include <screen.h>
 #include <printk.h>
 #include <assert.h>
@@ -13,12 +14,21 @@ extern uint16_t kernel_sectors;
 extern uint16_t tasknum;
 extern uint32_t table_offset;
 
+volatile pcb_t *current_running[NR_CPUS];
+
 pcb_t pcb[NUM_MAX_TASK];
 const ptr_t pid0_stack = INIT_KERNEL_STACK + PAGE_SIZE;
 pcb_t pid0_pcb = {
     .pid = 0,
     .kernel_sp = (ptr_t)pid0_stack,
     .user_sp = (ptr_t)pid0_stack
+};
+
+const ptr_t s_pid0_stack = INIT_KERNEL_STACK + 2 * PAGE_SIZE;
+pcb_t s_pid0_pcb = {
+    .pid = 0,
+    .kernel_sp = (ptr_t)s_pid0_stack,
+    .user_sp = (ptr_t)s_pid0_stack
 };
 
 LIST_HEAD(ready_queue);
@@ -36,8 +46,8 @@ void do_scheduler(void)
     /************************************************************/
 
     // TODO: [p2-task1] Modify the current_running pointer.
-    pcb_t *prev = current_running;
-    if(current_running->pid != 0 && current_running->pid != -1){
+    pcb_t *prev = current_running[cpu_id];
+    if(current_running[cpu_id]->pid != -1 && current_running[cpu_id]->pid != 0){
         if(prev->status == TASK_RUNNING){
             prev->status = TASK_READY;
             list_add_tail(&prev->list, &ready_queue);
@@ -46,12 +56,13 @@ void do_scheduler(void)
         }
     }
     list_node_t *temp = get_ready_node();
-    current_running = get_pcb_by_node(temp);
-    current_running->status = TASK_RUNNING;
-    screen_move_cursor(current_running->cursor_x, current_running->cursor_y);
+    current_running[cpu_id] = get_pcb_by_node(temp);
+    current_running[cpu_id]->status = TASK_RUNNING;
+    current_running[cpu_id]->run_cpu_id = cpu_id;
+    screen_move_cursor(current_running[cpu_id]->cursor_x, current_running[cpu_id]->cursor_y);
 
     // TODO: [p2-task1] switch_to current_running
-    switch_to(prev, current_running);
+    switch_to(prev, current_running[cpu_id]);
 }
 
 void do_sleep(uint32_t sleep_time)
@@ -61,9 +72,9 @@ void do_sleep(uint32_t sleep_time)
     // 1. block the current_running
     // 2. set the wake up time for the blocked task
     // 3. reschedule because the current_running is blocked.0
-    current_running->wakeup_time = get_timer() + sleep_time;
+    current_running[cpu_id]->wakeup_time = get_timer() + sleep_time;
     
-    do_block(&current_running->list, &sleep_queue);
+    do_block(&current_running[cpu_id]->list, &sleep_queue);
 }
 
 void do_block(list_node_t *pcb_node, list_head *queue)
@@ -92,11 +103,11 @@ void do_unblock(list_node_t *pcb_node)
 
 list_node_t *get_ready_node(){
     list_node_t *temp = ready_queue.next;
-    if(temp == &ready_queue){
-        return &pid0_pcb.list;
+    while(temp != &ready_queue){
+        list_del(temp);
+        return temp;
     }
-    list_del(temp);
-    return temp;
+    return cpu_id ? &s_pid0_pcb.list : &pid0_pcb.list;
 }
 
 pid_t do_exec(char *name, int argc, char *argv[]){
@@ -175,7 +186,7 @@ void release_all_lock(pid_t pid){
 }
 
 void do_exit(void){
-    current_running->status = TASK_EXITED;
+    current_running[cpu_id]->status = TASK_EXITED;
     do_scheduler();
 }
 
@@ -184,13 +195,21 @@ int do_kill(pid_t pid){
     if(p == NULL){
         return 0;   //failed
     }
-    if(current_running->pid == pid){
-        do_exit();
-        return 1;
-    }
-    p->status = TASK_EXITED;
+    // if(current_running[cpu_id]->pid == pid){
+    //     do_exit();
+    //     return 1;
+    // }
+    // p->status = TASK_EXITED;
 
-    release_pcb(p);
+    // release_pcb(p);
+    if(p->status != TASK_EXITED && p->pid == pid){
+        if(p->status == TASK_RUNNING && p->run_cpu_id != cpu_id){
+            p->status = TASK_EXITED;
+        }else{
+            p->status = TASK_EXITED;
+            release_pcb(p);
+        }
+    }
 
     return 1;   //success
 }
@@ -202,7 +221,7 @@ int do_waitpid(pid_t pid){
         return 0;   //failed
     }
     if(p->status != TASK_EXITED){
-        do_block(&current_running->list, &p->wait_list);
+        do_block(&current_running[cpu_id]->list, &p->wait_list);
         return p->pid;
     }else{
         return p->pid;
@@ -215,14 +234,16 @@ void do_process_show(void){
     printk("\n[Process Table]\n");
     for(i = 0;i < NUM_MAX_TASK;i++){
         if(pcb[i].status == TASK_EXITED && pcb[i].pid == -1) continue;
-        else{
+        else if(pcb[i].status == TASK_RUNNING){
+            printk("[%d] PID: %d STATUS: %s USING: %d\n",i,pcb[i].pid,status[pcb[i].status],pcb[i].run_cpu_id);
+        }else{
             printk("[%d] PID: %d STATUS: %s\n",i,pcb[i].pid,status[pcb[i].status]);
         }
     }
 }
 
 pid_t do_getpid(){
-    return current_running->pid;
+    return current_running[cpu_id]->pid;
 }
 
 pcb_t *get_pcb_by_pid(pid_t pid){
@@ -242,5 +263,5 @@ pcb_t *get_pcb_by_node(list_node_t *node){
             return &pcb[i];
         }
     }
-    return NULL;
+    return cpu_id?&s_pid0_pcb : &pid0_pcb;
 }
