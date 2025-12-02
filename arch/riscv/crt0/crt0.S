@@ -21,10 +21,12 @@ bss_done:
 	call main
 
     /* TODO: [p1-task3] finish task and return to the kernel, replace this in p3-task2! */
-	ret
+	
     /************************************************************/
     /* TODO: [P3] call sys_exit */
     /************************************************************/
+	li a7, 1	//SYS_EXIT
+	ecall
 // while(1) loop, unreachable here
 loop:
     wfi
