@@ -1,5 +1,5 @@
 #include <asm/biosdef.h>
-
+#include <csr.h>
 // os size location (os_size could be sectors [p1-task3] or bytes [p1-task4])
 .equ os_size_loc, 0x502001fc
 
