@@ -33,8 +33,8 @@ clear_done:
   /* TODO: [p1-task2] setup C environment */
 
   la tp,pid0_pcb
-  li sp,KERNEL_STACK	#set stack space
-  jal main
+  la sp,KERNEL_STACK	#set stack space
+  call main
 
 s_cpu_start:
   la tp,s_pid0_pcb
