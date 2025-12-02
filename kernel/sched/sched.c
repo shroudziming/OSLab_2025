@@ -85,7 +85,9 @@ void do_block(list_node_t *pcb_node, list_head *queue)
     pcb->status = TASK_BLOCKED;
 
     list_add_tail(pcb_node, queue);
-    do_scheduler();
+    if(pcb_node == &current_running[cpu_id]->list){
+        do_scheduler();
+    }
 }
 
 void do_unblock(list_node_t *pcb_node)
@@ -103,7 +105,7 @@ void do_unblock(list_node_t *pcb_node)
 
 list_node_t *get_ready_node(){
     list_node_t *temp = ready_queue.next;
-    while(temp != &ready_queue){
+    if(temp != &ready_queue){
         list_del(temp);
         return temp;
     }
@@ -158,13 +160,10 @@ pid_t do_exec(char *name, int argc, char *argv[]){
 void release_pcb(pcb_t *p){
     if(p == NULL) return;
 
-    p->status = TASK_EXITED;
-    p->pid = -1;
-    list_del(&p->list);
-    if(!list_empty(&p->wait_list)){
-        free_block_list(&p->wait_list);
+    if(current_running[0]->pid != p->pid && current_running[1]->pid != p->pid){
+        list_del(&p->list);
     }
-
+    free_block_list(&p->wait_list);
     release_all_lock(p->pid);
 
 }
@@ -215,17 +214,15 @@ int do_kill(pid_t pid){
 }
 
 int do_waitpid(pid_t pid){
-    pcb_t *p = get_pcb_by_pid(pid);
-
-    if(p == NULL){
-        return 0;   //failed
+    for(int i = 0; i < NUM_MAX_TASK; i++){
+        if(pcb[i].pid == pid){
+            if(pcb[i].status != TASK_EXITED){
+                do_block(&current_running[cpu_id]->list, &pcb[i].wait_list);
+                return pid;
+            }
+        }
     }
-    if(p->status != TASK_EXITED){
-        do_block(&current_running[cpu_id]->list, &p->wait_list);
-        return p->pid;
-    }else{
-        return p->pid;
-    }
+    return 0;
 }
 
 void do_process_show(void){
