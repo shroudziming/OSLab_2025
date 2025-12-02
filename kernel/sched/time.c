@@ -40,10 +40,9 @@ void check_sleeping(void)
     while(current != &sleep_queue){
         next = current->next;
 
-        pcb_t *pcb = container_of(current,pcb_t,list);
+        pcb_t *pcb = get_pcb_by_node(current);
 
         if(now >= pcb->wakeup_time){
-            pcb->wakeup_time = 0;
             do_unblock(current);
         }
 
