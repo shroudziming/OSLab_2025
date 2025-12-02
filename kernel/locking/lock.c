@@ -32,19 +32,13 @@ void spin_lock_init(spin_lock_t *lock)
 int spin_lock_try_acquire(spin_lock_t *lock)
 {
     /* TODO: [p2-task2] try to acquire spin lock */
-    uint32_t expected = LOCKED;
-
-    uint32_t ret = atomic_swap(expected,(ptr_t)&(lock->status));
-    if(ret == UNLOCKED){
-        return 1;   //success
-    }
-    return 0;   //failed
+    return (atomic_swap(LOCKED, (ptr_t)&lock->status) == UNLOCKED);
 }
 
 void spin_lock_acquire(spin_lock_t *lock)
 {
     /* TODO: [p2-task2] acquire spin lock */
-    while(!spin_lock_try_acquire(lock)){
+    while(atomic_swap(LOCKED, (ptr_t)&lock->status) == LOCKED){
         ;
     }    
 }
@@ -86,7 +80,7 @@ int do_mutex_lock_init(int key)
 void do_mutex_lock_acquire(int mlock_idx)
 {
     /* TODO: [p2-task2] acquire mutex lock */
-    if(spin_lock_try_acquire(&mlocks[mlock_idx].lock) == 0){
+    if(spin_lock_try_acquire(&mlocks[mlock_idx].lock)){
         mlocks[mlock_idx].owner = current_running[cpu_id]->pid;
         mlocks[mlock_idx].locked = 1;
         return;
@@ -107,8 +101,8 @@ void do_mutex_lock_release(int mlock_idx)
         do_unblock(node);
         
     }else {
-        mutex->locked = 0;
         mutex->owner = -1;
+        mutex->locked = 0;
         spin_lock_release(&mutex->lock);
     }
     
@@ -217,7 +211,7 @@ void do_condition_wait(int cond_idx, int mutex_idx){
     do_mutex_lock_release(mutex_idx);
     do_scheduler();
 
-    // do_mutex_lock_acquire(mutex_idx);
+    do_mutex_lock_acquire(mutex_idx);
 }
 
 void do_condition_signal(int cond_idx){
