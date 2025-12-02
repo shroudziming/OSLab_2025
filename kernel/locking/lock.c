@@ -87,12 +87,12 @@ void do_mutex_lock_acquire(int mlock_idx)
 {
     /* TODO: [p2-task2] acquire mutex lock */
     if(spin_lock_try_acquire(&mlocks[mlock_idx].lock) == 0){
-        mlocks[mlock_idx].owner = current_running->pid;
+        mlocks[mlock_idx].owner = current_running[cpu_id]->pid;
         mlocks[mlock_idx].locked = 1;
         return;
     }
 
-    do_block(&current_running->list,&mlocks[mlock_idx].block_queue);
+    do_block(&current_running[cpu_id]->list,&mlocks[mlock_idx].block_queue);
 }
 
 void do_mutex_lock_release(int mlock_idx)
@@ -164,7 +164,7 @@ void do_barrier_wait(int bar_idx){
     barrier_t *barrier = &barriers[bar_idx];
     barrier->count++;
     if(barrier->count < barrier->goal){
-        do_block(&current_running->list, &barrier->wait_queue);
+        do_block(&current_running[cpu_id]->list, &barrier->wait_queue);
     }else{
         free_block_list(&barrier->wait_queue);
         barrier->count = 0;
@@ -212,8 +212,8 @@ void do_condition_wait(int cond_idx, int mutex_idx){
         return;
     }
     
-    current_running->status = TASK_BLOCKED;
-    list_add_tail(&current_running->list,&conditions[cond_idx].wait_queue);
+    current_running[cpu_id]->status = TASK_BLOCKED;
+    list_add_tail(&current_running[cpu_id]->list,&conditions[cond_idx].wait_queue);
     do_mutex_lock_release(mutex_idx);
     do_scheduler();
 
@@ -289,7 +289,7 @@ int do_mbox_send(int mbox_idx, void * msg, int msg_length){
     //if full
     while((temp_w = mailboxes[mbox_idx].wp + msg_length) > MAX_MBOX_LENGTH + mailboxes[mbox_idx].rp){
         
-        do_block(&current_running->list, &mailboxes[mbox_idx].wait_full_queue);
+        do_block(&current_running[cpu_id]->list, &mailboxes[mbox_idx].wait_full_queue);
         count++;
     }
     
@@ -306,7 +306,7 @@ int do_mbox_recv(int mbox_idx, void * msg, int msg_length){
     //if empty
     while((temp_r = mailboxes[mbox_idx].rp + msg_length) > mailboxes[mbox_idx].wp){
         
-        do_block(&current_running->list, &mailboxes[mbox_idx].wait_empty_queue);
+        do_block(&current_running[cpu_id]->list, &mailboxes[mbox_idx].wait_empty_queue);
         count++;
     }
     circle_copy(msg,mailboxes[mbox_idx].msg,mailboxes[mbox_idx].rp,msg_length,0);
