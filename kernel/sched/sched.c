@@ -14,7 +14,7 @@ extern uint16_t kernel_sectors;
 extern uint16_t tasknum;
 extern uint32_t table_offset;
 
-volatile pcb_t *current_running[NR_CPUS];
+pcb_t *current_running[NR_CPUS];
 
 pcb_t pcb[NUM_MAX_TASK];
 const ptr_t pid0_stack = INIT_KERNEL_STACK + PAGE_SIZE;
@@ -85,9 +85,9 @@ void do_block(list_node_t *pcb_node, list_head *queue)
     pcb->status = TASK_BLOCKED;
 
     list_add_tail(pcb_node, queue);
-    if(pcb_node == &current_running[cpu_id]->list){
-        do_scheduler();
-    }
+    
+    do_scheduler();
+    
 }
 
 void do_unblock(list_node_t *pcb_node)
@@ -159,7 +159,7 @@ pid_t do_exec(char *name, int argc, char *argv[]){
 
 void release_pcb(pcb_t *p){
     if(p == NULL) return;
-
+    p->pid = -1;
     if(current_running[0]->pid != p->pid && current_running[1]->pid != p->pid){
         list_del(&p->list);
     }
