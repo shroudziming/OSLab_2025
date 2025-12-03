@@ -247,6 +247,8 @@ void init_mbox(){
         mailboxes[i].wait_empty_queue.next = &mailboxes[i].wait_empty_queue;
         mailboxes[i].wait_full_queue.prev = &mailboxes[i].wait_full_queue;
         mailboxes[i].wait_full_queue.next = &mailboxes[i].wait_full_queue;
+
+        for (int j = 0; j < MAX_MBOX_LENGTH + 1; j++) mailboxes[i].msg[j] = 0;
     }
 }
 
