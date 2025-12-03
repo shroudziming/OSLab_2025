@@ -118,11 +118,11 @@ void do_semaphore_down(int sema_idx);
 void do_semaphore_destroy(int sema_idx);
 
 #define MAX_MBOX_LENGTH (64)
-#define NAME_LEN 32
+#define LEN_OF_NAME 20
 typedef struct mailbox
 {
     // TODO [P3-TASK2 mailbox]
-    char name[NAME_LEN];
+    char name[LEN_OF_NAME];
     char msg[MAX_MBOX_LENGTH + 1];
     int wp;
     int rp;
