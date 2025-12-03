@@ -4,9 +4,9 @@
 ENTRY(_start)
 
     /* TODO: [p1-task3] setup C runtime environment for the user program */
-	la sp,_start	#set stack top
-	li t0,0x10000
-	add sp,sp,t0
+	# la sp,_start	#set stack top
+	# li t0,0x10000
+	# add sp,sp,t0
 
 	la t1,__bss_start
 	la t2,__BSS_END__
