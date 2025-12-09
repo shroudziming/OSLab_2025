@@ -134,8 +134,8 @@ pid_t do_exec(char *name, int argc, char *argv[]){
             p->status = TASK_READY;
             p->cursor_x = 0;
             p->cursor_y = 0;
-            p->kernel_sp = (reg_t)(allocKernelPage(1) + PAGE_SIZE);
-            p->user_sp = (reg_t)(allocUserPage(1) + PAGE_SIZE);
+            p->kernel_sp = ROUND(pcb[slot].kernel_sp,PAGE_SIZE);
+            p->user_sp = ROUND(pcb[slot].user_sp,PAGE_SIZE);
             p->list.prev = p->list.next = NULL;
             uint64_t user_sp = p->user_sp;
             user_sp -= sizeof(char *) * argc;
