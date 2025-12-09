@@ -4,6 +4,7 @@
 #include <stdint.h>
 typedef int32_t pid_t;
 typedef uint64_t size_t;
+typedef pid_t pthread_t;
 
 void sys_sleep(uint32_t time);
 void sys_yield(void);
