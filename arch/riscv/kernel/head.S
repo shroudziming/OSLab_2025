@@ -6,8 +6,8 @@
 #include <asm.h>
 #include <csr.h>
 
-#define KERNEL_STACK		0x50500000
-#define S_KERNEL_STACK	0x50600000
+#define KERNEL_STACK		0xffffffc050501000
+#define S_KERNEL_STACK	0xffffffc050502000
 
 .section ".entry_function","ax"
 ENTRY(_start)
@@ -33,12 +33,12 @@ clear_done:
   /* TODO: [p1-task2] setup C environment */
 
   la tp,pid0_pcb
-  la sp,KERNEL_STACK	#set stack space
+  li sp,KERNEL_STACK	#set stack space
   call main
 
 s_cpu_start:
   la tp,s_pid0_pcb
-  la sp,S_KERNEL_STACK
+  li sp,S_KERNEL_STACK
   call main
 
 loop:
