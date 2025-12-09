@@ -2,6 +2,7 @@
 #define PGTABLE_H
 
 #include <type.h>
+#include <os/string.h>
 
 #define SATP_MODE_SV39 8
 #define SATP_MODE_SV48 9
@@ -72,46 +73,56 @@ static inline void set_satp(
 
 typedef uint64_t PTE;
 
+#define KERNEL_BASE 0xffffffc000000000
+
 /* Translation between physical addr and kernel virtual addr */
 static inline uintptr_t kva2pa(uintptr_t kva)
 {
     /* TODO: [P4-task1] */
+    return kva - KERNEL_BASE;
 }
 
 static inline uintptr_t pa2kva(uintptr_t pa)
 {
     /* TODO: [P4-task1] */
+    return pa + KERNEL_BASE;
 }
 
 /* get physical page addr from PTE 'entry' */
 static inline uint64_t get_pa(PTE entry)
 {
     /* TODO: [P4-task1] */
+    return (entry >> _PAGE_PFN_SHIFT) << NORMAL_PAGE_SHIFT;
 }
 
 /* Get/Set page frame number of the `entry` */
 static inline long get_pfn(PTE entry)
 {
     /* TODO: [P4-task1] */
+    return (long)(entry >> _PAGE_PFN_SHIFT);
 }
 static inline void set_pfn(PTE *entry, uint64_t pfn)
 {
     /* TODO: [P4-task1] */
+    *entry = *entry | (pfn << _PAGE_PFN_SHIFT);
 }
 
 /* Get/Set attribute(s) of the `entry` */
 static inline long get_attribute(PTE entry, uint64_t mask)
 {
     /* TODO: [P4-task1] */
+    return (long)(entry & mask);
 }
 static inline void set_attribute(PTE *entry, uint64_t bits)
 {
     /* TODO: [P4-task1] */
+    *entry = (PTE)(*entry | bits);
 }
 
 static inline void clear_pgdir(uintptr_t pgdir_addr)
 {
     /* TODO: [P4-task1] */
+    bzero((void *)pgdir_addr, NORMAL_PAGE_SIZE);
 }
 
 #endif  // PGTABLE_H
