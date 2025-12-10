@@ -204,6 +204,20 @@ static void kernel_brake(void)
         __asm__ volatile("wfi");
 }
 
+void disable_temp_map(){
+    PTE *pgdir = (PTE *)pa2kva(PGDIR_PA);
+    for(uint64_t va = 0x50000000lu;va < 0x51000000lu;va += 0x200000lu){
+        va &= VA_MASK;
+        uint64_t vpn2 = va >> (NORMAL_PAGE_SHIFT + PPN_BITS + PPN_BITS);
+        uint64_t vpn1 = (vpn2 << PPN_BITS) ^ (va >> (NORMAL_PAGE_SHIFT + PPN_BITS));
+        PTE *pmd = (PTE *)pa2kva(get_pa(pgdir[vpn2]));
+        pmd[vpn1] = 0;  //先清除2MB页表项
+    }
+    pgdir[1] = 0;   //clear temporary mapping in 0x50000000 ~ 0x51000000
+}
+
+static volatile int cpu1_initialized = 0;
+
 int main(void)
 {
     kernel_sectors = *(uint16_t*)KERNEL_SECTOR_ADDR;
@@ -250,22 +264,30 @@ int main(void)
         // Init screen (QAQ)
         init_screen();
         printk("> [INIT] SCREEN initialization succeeded.\n");
-
-        // bios_putstr("Hello OS!\n\r");
-        // bios_putstr(buf);
         
+        // pid_t shell_pid = do_exec("shell",0,NULL);
         
-        pid_t shell_pid = do_exec("shell",0,NULL);
-
         unlock_kernel();
         wakeup_other_hart();
 
+        while(!cpu1_initialized);
+
         lock_kernel();  //re grab the lock
+
+        printk("> [INIT] CPU #%u has entered kernel with VM!\n",
+        (unsigned int)get_current_cpu_id());
+
+        disable_temp_map();
         cpu_id = 0;
     }else{
         lock_kernel();
         cpu_id = 1;
         current_running[cpu_id]->status = TASK_RUNNING;
+
+        printk("> [INIT] CPU #%u has entered kernel with VM!\n",
+        (unsigned int)get_current_cpu_id());
+        cpu1_initialized = 1;
+        unlock_kernel();
     }
     
     setup_exception();
@@ -276,8 +298,8 @@ int main(void)
      * NOTE: if you use SMP, then every CPU core should call
      *  `kernel_brake()` to stop executing!
      */
-    printk("> [INIT] CPU #%u has entered kernel with VM!\n",
-        (unsigned int)get_current_cpu_id());
+    // printk("> [INIT] CPU #%u has entered kernel with VM!\n",
+    //     (unsigned int)get_current_cpu_id());
     // TODO: [p4-task1 cont.] remove the brake and continue to start user processes.
     kernel_brake();
 
