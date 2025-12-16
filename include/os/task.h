@@ -3,9 +3,11 @@
 
 #include <type.h>
 
-#define TASK_MEM_BASE    0x52000000
+#define TASK_MEM_BASE    0xffffffc052000000
 #define TASK_MAXNUM      16
 #define TASK_SIZE        0x10000
+#define USER_ENTRYPOINT  0x10000
+// #define TEMP_MEM         0xffffffc059000000
 #define NAME_LEN	32
 
 #define SECTOR_SIZE 512
@@ -17,6 +19,7 @@ typedef struct {
 	uint64_t file_off;
 	uint64_t file_size;
 	uint64_t entry;
+	uint64_t p_memsz;
 } task_info_t;
 
 extern task_info_t tasks[TASK_MAXNUM];
