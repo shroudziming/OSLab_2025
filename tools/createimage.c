@@ -15,6 +15,7 @@
 #define BOOT_LOADER_SIG_1 0x55
 #define BOOT_LOADER_SIG_2 0xaa
 
+
 #define NAME_LEN	32
 
 #define NBYTES2SEC(nbytes) (((nbytes) / SECTOR_SIZE) + ((nbytes) % SECTOR_SIZE != 0))
@@ -25,6 +26,7 @@ typedef struct {
 	uint64_t file_off;	//offset in image
 	uint64_t file_size;	
 	uint64_t entry;		//entrypoint in mem
+    uint64_t p_memsz;
 } task_info_t;
 
 #define TASK_MAXNUM 16
@@ -87,6 +89,8 @@ static void create_image(int nfiles, char *files[])
     int tasknum = nfiles - 2;
     int nbytes_kernel = 0;
     int phyaddr = 0;
+    uint32_t p_filesz = 0;
+    uint32_t p_memsz = 0;
     FILE *fp = NULL, *img = NULL;
     Elf64_Ehdr ehdr;
     Elf64_Phdr phdr;
@@ -126,6 +130,11 @@ static void create_image(int nfiles, char *files[])
             if (strcmp(*files, "main") == 0) {
                 nbytes_kernel += get_filesz(phdr);
             }
+
+            if(phdr.p_type == PT_LOAD){
+                p_filesz += phdr.p_filesz;
+                p_memsz += phdr.p_memsz;
+            }
         }
 
         /* write padding bytes */
@@ -152,6 +161,7 @@ static void create_image(int nfiles, char *files[])
 		taskinfo[taskidx].file_off = start_phyaddr;
 		taskinfo[taskidx].file_size = total_bytes;
 		taskinfo[taskidx].entry = ehdr.e_entry;
+        taskinfo[taskidx].p_memsz = p_memsz;
 	}
 	fclose(fp);
         files++;
