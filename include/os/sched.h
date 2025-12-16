@@ -71,8 +71,6 @@ typedef struct pcb
     // NOTE: this order must be preserved, which is defined in regs.h!!
     reg_t kernel_sp;
     reg_t user_sp;
-    ptr_t kernel_stack_base;
-    ptr_t user_stack_base;
 
     /* previous, next pointer */
     list_node_t list;
@@ -93,6 +91,9 @@ typedef struct pcb
 
     //running on which cpu
     uint64_t run_cpu_id;
+
+    //pgdir
+    uintptr_t pgdir;
 } pcb_t;
 
 /* ready queue to run */
