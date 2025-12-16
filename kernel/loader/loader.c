@@ -1,7 +1,9 @@
 #include <os/task.h>
 #include <os/string.h>
+#include <printk.h>
 #include <os/kernel.h>
 #include <type.h>
+#include <os/mm.h>
 
 #define APP_BASE 0x52000000
 #define APP_ADDR_INTERVAL 0x10000
@@ -31,34 +33,6 @@ static int find_task_index(char *name){
 
 uint64_t load_task_img(char *taskname)
 {
-    /**
-     * TODO:
-     * 1. [p1-task3] load task from image via task id, and return its entrypoint
-     * 2. [p1-task4] load task via task name, thus the arg should be 'char *taskname'
-     */
-	//[p1-task3] load by id
-	/*
-	short tasknum = *(short *)TASKNUM_ADDR;
-	if(taskid < 0 || taskid >= tasknum){
-		bios_putstr("Invalid taskid");
-		return 0;
-	}
-	short kernel_sectors = 15;
-	int block_id = 1 + kernel_sectors + taskid * 15;
-	uintptr_t mem_addr = APP_BASE + taskid * APP_ADDR_INTERVAL;
-	bios_putstr("loading task ");
-	bios_putchar('0' + taskid);
-
-	bios_sd_read(mem_addr,15,block_id);
-	unsigned char *p = (unsigned char *)mem_addr;
-	bios_putstr("First 4 bytes: ");
-	bios_puthex(p[0]);
-	bios_puthex(p[1]);
-	bios_puthex(p[2]);
-	bios_puthex(p[3]);
-	bios_putstr("\n");
-	
-	*/
 	
 	//[p1-task4] load by name
 	kernel_sectors = *(short *)KERNEL_SECTORS_ADDR;
@@ -109,13 +83,78 @@ uint64_t load_task_img(char *taskname)
 		bytes_remaining -= bytes_to_copy;
 	}
 
-	// bios_sd_read((uintptr_t)sector_buf,num_sectors,start_sector);
-	
-	// memcpy((void *)mem_addr,sector_buf + sector_offset,size);
-
-	
-	// bios_putstr("done.\n");
-	
-
     return mem_addr;
+}
+
+
+uint64_t map_task(char *taskname, uintptr_t pgdir)
+{
+    static uint8_t sector_buf[SECTOR_SIZE];
+
+    for (int i = 0; i < TASK_MAXNUM; i++) {
+        if (strcmp(taskname, tasks[i].name) != 0)
+            continue;
+
+        uint64_t file_off  = tasks[i].file_off;
+        uint64_t file_size = tasks[i].file_size;
+        uint64_t mem_size  = tasks[i].p_memsz;
+
+        uint64_t cur_file_off = 0;
+        uint64_t user_va_base = USER_ENTRYPOINT;
+
+        while (cur_file_off < file_size) {
+            uint64_t abs_off = file_off + cur_file_off;
+            uint64_t sector  = abs_off / SECTOR_SIZE;
+            uint64_t sec_off = abs_off % SECTOR_SIZE;
+
+            bios_sd_read(kva2pa((uintptr_t)sector_buf), 1, sector);
+
+            uint64_t copy_bytes =
+                (SECTOR_SIZE - sec_off < file_size - cur_file_off)
+                    ? (SECTOR_SIZE - sec_off)
+                    : (file_size - cur_file_off);
+
+            uint64_t user_va = user_va_base + cur_file_off;
+            uint64_t page_va = user_va & ~(PAGE_SIZE - 1);
+
+            uintptr_t page_kva = alloc_page_helper(page_va, pgdir);
+
+            memcpy(
+                (void *)(page_kva + (user_va & (PAGE_SIZE - 1))),
+                sector_buf + sec_off,
+                copy_bytes
+            );
+
+            cur_file_off += copy_bytes;
+        }
+
+        //bss section zeroed
+        if (mem_size > file_size) {
+            uint64_t bss_start_va = user_va_base + file_size;
+            uint64_t bss_end_va   = user_va_base + mem_size;
+
+            uint64_t va = bss_start_va & ~(PAGE_SIZE - 1);
+
+            while (va < bss_end_va) {
+                uintptr_t page_kva = alloc_page_helper(va, pgdir);
+
+                uint64_t start = (va < bss_start_va)
+                                     ? (bss_start_va & (PAGE_SIZE - 1))
+                                     : 0;
+
+                uint64_t end = PAGE_SIZE;
+                if (va + PAGE_SIZE > bss_end_va)
+                    end = bss_end_va & (PAGE_SIZE - 1);
+
+                if (end > start)
+                    bzero((void *)(page_kva + start), end - start);
+
+                va += PAGE_SIZE;
+            }
+        }
+
+        return USER_ENTRYPOINT;
+    }
+
+    return -1;
 }
