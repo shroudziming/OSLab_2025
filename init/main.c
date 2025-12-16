@@ -30,6 +30,7 @@
 
 #define MAX_INPUT_LEN 32
 
+
 int version = 2; // version must between 0 and 9
 char buf[VERSION_BUF];
 extern void ret_from_exception();
@@ -104,9 +105,7 @@ void init_pcb_stack(
     pt_regs->regs[11] = (reg_t)argv;    //a1
 
     //set sstatus
-    pt_regs->sstatus = 0;
-    pt_regs->sstatus &= ~SR_SPP;   //SPP,from user mode
-    pt_regs->sstatus |= SR_SPIE;   //SPIE, enable interrupt
+    pt_regs->sstatus = SR_SPIE | SR_SUM; //enable user mode interrupt & allow user to access sup page
 
     /* TODO: [p2-task1] set sp to simulate just returning from switch_to
      * NOTE: you should prepare a stack, and push some values to
@@ -216,7 +215,6 @@ void disable_temp_map(){
     pgdir[1] = 0;   //clear temporary mapping in 0x50000000 ~ 0x51000000
 }
 
-static volatile int cpu1_initialized = 0;
 
 int main(void)
 {
@@ -231,11 +229,15 @@ int main(void)
 
         lock_kernel();
 
+        init_memory_manager();
+
         // Init jump table provided by kernel and bios(ΦωΦ)
         init_jmptab();
 
+
         // Init task information (〃'▽'〃)
         init_task_info();
+
 
         // Init Process Control Blocks |•'-'•) ✧
         init_pcb();
@@ -265,12 +267,11 @@ int main(void)
         init_screen();
         printk("> [INIT] SCREEN initialization succeeded.\n");
         
-        // pid_t shell_pid = do_exec("shell",0,NULL);
+        pid_t shell_pid = do_exec("shell",0,NULL);
         
+        printk("> [INIT] shell initialization succeeded.\n");
         unlock_kernel();
         wakeup_other_hart();
-
-        while(!cpu1_initialized);
 
         lock_kernel();  //re grab the lock
 
@@ -286,7 +287,7 @@ int main(void)
 
         printk("> [INIT] CPU #%u has entered kernel with VM!\n",
         (unsigned int)get_current_cpu_id());
-        cpu1_initialized = 1;
+
         unlock_kernel();
     }
     
@@ -301,7 +302,7 @@ int main(void)
     // printk("> [INIT] CPU #%u has entered kernel with VM!\n",
     //     (unsigned int)get_current_cpu_id());
     // TODO: [p4-task1 cont.] remove the brake and continue to start user processes.
-    kernel_brake();
+    // kernel_brake();
 
     // TODO: [p2-task4] Setup timer interrupt and enable all interrupt globally
     // NOTE: The function of sstatus.sie is different from sie's
