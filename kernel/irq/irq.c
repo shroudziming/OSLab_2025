@@ -3,6 +3,7 @@
 #include <os/sched.h>
 #include <os/string.h>
 #include <os/kernel.h>
+#include <os/mm.h>
 #include <printk.h>
 #include <assert.h>
 #include <screen.h>
@@ -53,9 +54,9 @@ void init_exception()
     exc_table[EXCC_LOAD_ACCESS] = handle_other;
     exc_table[EXCC_STORE_ACCESS] = handle_other;
     exc_table[EXCC_SYSCALL] = handle_syscall;
-    exc_table[EXCC_INST_PAGE_FAULT] = handle_other;
-    exc_table[EXCC_LOAD_PAGE_FAULT] = handle_other;
-    exc_table[EXCC_STORE_PAGE_FAULT] = handle_other;
+    exc_table[EXCC_INST_PAGE_FAULT] = handle_page_fault;
+    exc_table[EXCC_LOAD_PAGE_FAULT] = handle_page_fault;
+    exc_table[EXCC_STORE_PAGE_FAULT] = handle_page_fault;
     /* TODO: [p2-task4] initialize irq_table */
     /* NOTE: handle_int, handle_other, etc.*/
     irq_table[IRQC_U_SOFT] = handle_other;
@@ -70,6 +71,12 @@ void init_exception()
 
     /* TODO: [p2-task3] set up the entrypoint of exceptions */
     // setup_exception();
+}
+
+void handle_page_fault(regs_context_t *regs, uint64_t stval, uint64_t scause)
+{
+    printk("Page fault at address 0x%lx, cause: 0x%lx\n", stval, scause);
+    // handle_other(regs, stval, scause);
 }
 
 void handle_other(regs_context_t *regs, uint64_t stval, uint64_t scause)
