@@ -20,7 +20,7 @@ static unsigned long swap_in_count = 0;
 #define BITMAP_OFFSET(pa) (PAGE_IDX(pa) & 0x7) //which bit in that byte
 
 // NOTE: A/C-core
-static ptr_t kernMemCurr = FREEMEM_KERNEL;
+// static ptr_t kernMemCurr = FREEMEM_KERNEL;
 static uint8_t page_bitmap[TOTAL_PAGES / 8];
 int used_pages = 0;
 
@@ -28,9 +28,6 @@ extern uint16_t kernel_sectors; // from loader/init
 extern uint32_t swap_start_sector;
 // swap layout configuration
 #define SWAP_SECTORS_PER_SLOT (PAGE_SIZE / SECTOR_SIZE) // 8
-// #define SWAP_SLOT_NUM 256
-// #define SWAP_SECTOR_OFFSET  (swap_start_sector - kernel_sectors)//offset after kernel sectors
-
 #define SWAP_SLOT_NUM 256
 #define SWAP_SECTOR_OFFSET  (swap_start_sector - kernel_sectors)//offset after kernel sectors
 
@@ -61,6 +58,10 @@ static inline int is_valid_pa(uintptr_t pa) {
 /* helper: push frame index to FIFO tail */
 static void fifo_push(int idx)
 {
+    if ((fifo_tail + 1) % TOTAL_PAGES == fifo_head) {
+        printk("FIFO queue full\n");
+        return;
+    }
     fifo_q[fifo_tail] = idx;
     fifo_tail = (fifo_tail + 1) % TOTAL_PAGES;
 }
