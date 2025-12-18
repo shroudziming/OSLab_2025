@@ -22,6 +22,7 @@
 uint16_t kernel_sectors;
 uint16_t tasknum;
 uint32_t table_offset;
+uint32_t swap_start_sector;
 static int find_task_index(char *name){
 	int i;
 	for(i=0;i<tasknum;++i){
