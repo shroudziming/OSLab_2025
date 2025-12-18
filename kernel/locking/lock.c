@@ -54,25 +54,25 @@ int do_mutex_lock_init(int key)
     /* TODO: [p2-task2] initialize mutex lock */
     //check if the key exists
     for(int i = 0;i<LOCK_NUM;i++){
-        spin_lock_acquire(&mlocks[i].lock);
+        // spin_lock_acquire(&mlocks[i].lock);
         if(mlocks[i].key == key){
-            spin_lock_release(&mlocks[i].lock);
+            // spin_lock_release(&mlocks[i].lock);
             return i;   //return handle
         }
-        spin_lock_release(&mlocks[i].lock);
+        // spin_lock_release(&mlocks[i].lock);
     }
 
     for(int i = 0;i <LOCK_NUM;i++){
-        spin_lock_acquire(&mlocks[i].lock);
+        // spin_lock_acquire(&mlocks[i].lock);
         if(mlocks[i].key == -1){
             mlocks[i].key = key;
             init_list_head(&mlocks[i].block_queue);
             mlocks[i].owner = -1;
             mlocks[i].locked = 0;
-            spin_lock_release(&mlocks[i].lock);
+            // spin_lock_release(&mlocks[i].lock);
             return i;   //return handle
         }
-        spin_lock_release(&mlocks[i].lock);
+        // spin_lock_release(&mlocks[i].lock);
     }
     return -1;   //lock full
 }
