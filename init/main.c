@@ -27,7 +27,7 @@
 #define TABLE_OFFSET_ADDR 0xffffffc0502001F8
 #define KERNEL_SECTOR_ADDR 0xffffffc0502001FC
 #define TASKNUM_ADDR 0xffffffc0502001FE
-
+#define SWAP_START 0xffffffc0502001f0
 #define MAX_INPUT_LEN 32
 
 
@@ -40,6 +40,7 @@ task_info_t tasks[TASK_MAXNUM];
 extern uint16_t kernel_sectors;
 extern uint16_t tasknum;
 extern uint32_t table_offset;
+extern uint32_t swap_start_sector;
 
 static void init_jmptab(void)
 {
@@ -221,7 +222,7 @@ int main(void)
     kernel_sectors = *(uint16_t*)KERNEL_SECTOR_ADDR;
     tasknum        = *(uint16_t*)TASKNUM_ADDR;
     table_offset   = *(uint32_t*)TABLE_OFFSET_ADDR;
-
+    swap_start_sector = *(uint32_t*)SWAP_START;
     int cid = get_current_cpu_id();
 
     if(cid == 0){
@@ -309,6 +310,7 @@ int main(void)
     bios_set_timer(get_ticks() + TIMER_INTERVAL);
 
     printk("> [INIT] CPU %d initialization succeeded.\n", cpu_id);
+    // printk("swap starts from sector %d\n", swap_start_sector);
 
     unlock_kernel();
     // Infinite while loop, where CPU stays in a low-power state (QAQQQQQQQQQQQ)
