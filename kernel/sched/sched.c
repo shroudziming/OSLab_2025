@@ -10,7 +10,7 @@
 #include <printk.h>
 #include <assert.h>
 
-#define USER_STACK_PAGES 4
+#define USER_STACK_PAGES 1
 
 extern uint16_t kernel_sectors;
 extern uint16_t tasknum;
