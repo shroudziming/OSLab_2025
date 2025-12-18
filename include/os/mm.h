@@ -62,10 +62,16 @@ extern ptr_t allocLargePage(int numPage);
 extern void* kmalloc(size_t size);
 extern void share_pgtable(uintptr_t dest_pgdir, uintptr_t src_pgdir);
 extern uintptr_t alloc_page_helper(uintptr_t va, uintptr_t pgdir);
+extern int map_page_helper(uintptr_t va,uintptr_t pa,uintptr_t pgdir);
 extern void init_memory_manager();
 // TODO [P4-task4]: shm_page_get/dt */
 uintptr_t shm_page_get(int key);
 void shm_page_dt(uintptr_t addr);
 
+extern int swap_find(uintptr_t owner_pgdir, uintptr_t va);
+extern int swap_alloc_slot(void);
+extern void swap_free_slot(int slot);
+extern int swap_write_slot(int slot, uintptr_t pa);
+extern int swap_read_slot(int slot, uintptr_t pa);
 
 #endif /* MM_H */
