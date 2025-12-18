@@ -10,7 +10,7 @@
 #include <printk.h>
 #include <assert.h>
 
-#define USER_STACK_PAGES 8
+#define USER_STACK_PAGES 4
 
 extern uint16_t kernel_sectors;
 extern uint16_t tasknum;
@@ -50,13 +50,18 @@ void do_scheduler(void)
     /************************************************************/
 
     // TODO: [p2-task1] Modify the current_running pointer.
+    cpu_id = get_current_cpu_id();
     pcb_t *prev = current_running[cpu_id];
+
     if(current_running[cpu_id]->pid != -1 && current_running[cpu_id]->pid != 0){
         if(prev->status == TASK_RUNNING){
             prev->status = TASK_READY;
             list_add_tail(&prev->list, &ready_queue);
+        }else if(prev->status == TASK_EXITED && prev->pid != -1){
+            do_exit();
         }
     }
+    
     list_node_t *temp = get_ready_node();
     current_running[cpu_id] = get_pcb_by_node(temp);
     current_running[cpu_id]->status = TASK_RUNNING;
@@ -110,6 +115,11 @@ void do_unblock(list_node_t *pcb_node)
 list_node_t *get_ready_node(){
     list_node_t *temp = ready_queue.next;
     pcb_t *p = get_pcb_by_node(temp);
+    if(p->status == TASK_EXITED){
+        list_del(temp);
+        release_pcb(p);
+        return get_ready_node();
+    }
     if(temp != &ready_queue){
         list_del(temp);
         return temp;
@@ -162,7 +172,7 @@ pid_t do_exec(char *name, int argc, char *argv[]){
     // USER_STACK_ADDR - (USER_STACK_PAGES-1)*PAGE_SIZE  ... USER_STACK_ADDR + PAGE_SIZE
     for (int i = 0; i < USER_STACK_PAGES; i++) {
         uintptr_t va = USER_STACK_ADDR - (USER_STACK_PAGES - 1) * PAGE_SIZE + i * PAGE_SIZE;
-        alloc_page_helper(va, pgdir); // idempotent: if allocated already, returns kva
+        alloc_page_helper(va, pgdir); 
     }
 
     // user virtual top (VA) and working pointer (VA)
@@ -234,7 +244,9 @@ void release_pcb(pcb_t *p){
 
     pid_t old_pid = p->pid;
     
-    list_del(&p->list);
+    if(current_running[0] != p && current_running[1] != p){
+        list_del(&p->list);
+    }
     
     p->pid = -1;
     release_all_lock(old_pid);
@@ -280,28 +292,22 @@ int do_kill(pid_t pid){
         return 0;   //failed
     }
     if(p->status != TASK_EXITED){
-        if(p->status == TASK_RUNNING){
-            if(p->run_cpu_id != cpu_id){
-                // target running on other CPU: mark exited and notify that core
-                p->status = TASK_EXITED;
-                // list_del(&p->list);s
-            } else {
-                // target running on this CPU
-                if (p == current_running[cpu_id]) {
-                    // the process kills itself: perform exit (will schedule out and be released)
-                    do_exit();
-                } else {
-                    // This shouldn't normally happen, but handle safely:
-                    p->status = TASK_EXITED;
-                }
-            }
-        } else {
-            // not running: safe to mark and release
+        if(p->run_cpu_id != cpu_id){
+            // target running on other CPU
             p->status = TASK_EXITED;
-            release_pcb(p);
-            // list_del(&p->list);
-            return 1;
+        } else {
+            // target running on this CPU
+            if (p == current_running[cpu_id]) {
+                // the process kills itself
+                do_exit();
+            } else {
+                p->status = TASK_EXITED;
+            }
         }
+    } else {
+        // not running: safe to mark and release
+        release_pcb(p);
+        return 1;
     }
 
     return 1;   //success
