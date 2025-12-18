@@ -14,7 +14,8 @@
 #define OS_SIZE_LOC (BOOT_LOADER_SIG_OFFSET - 2)
 #define BOOT_LOADER_SIG_1 0x55
 #define BOOT_LOADER_SIG_2 0xaa
-
+#define SWAP_START_LOC   (BOOT_LOADER_SIG_OFFSET - 14)  // 0x1F0
+#define SWAP_SECTORS     131072   // swap 区大小
 
 #define NAME_LEN	32
 
@@ -169,6 +170,22 @@ static void create_image(int nfiles, char *files[])
 
     write_img_info(nbytes_kernel, taskinfo, tasknum, img);
 
+    // long img_end_bytes = ftell(img);
+
+    // // SWAP 起始扇区号（向上取整）
+    // uint32_t swap_start_sector = NBYTES2SEC(img_end_bytes);
+
+    // // 把 swap 起始扇区号写进 bootblock
+    // fseek(img, SWAP_START_LOC, SEEK_SET);
+    // fwrite(&swap_start_sector, sizeof(uint32_t), 1, img);
+
+    // // 扩展 image，预留 SWAP_SECTORS 个扇区
+    // fseek(img, swap_start_sector * SECTOR_SIZE, SEEK_SET);
+    // long swap_end_bytes =
+    //     (long)(swap_start_sector + SWAP_SECTORS) * SECTOR_SIZE;
+
+    // write_padding(img, &phyaddr, swap_end_bytes);
+
     fclose(img);
 }
 
@@ -285,6 +302,13 @@ static void write_img_info(int nbytes_kernel, task_info_t *taskinfo,
     }
 
     fflush(img);
+
+    long img_end_bytes = ftell(img);
+    // SWAP 起始扇区号（向上取整）
+    uint32_t swap_start_sector = NBYTES2SEC(img_end_bytes);
+
+    fseek(img,0x1F0,SEEK_SET);	//0x1F0 - 0x1F3
+    fwrite(&swap_start_sector, sizeof(uint32_t), 1, img);
 
     //write table offset bytes
     fseek(img,0x1F8,SEEK_SET);	//0x1F8 - 0x1FB
