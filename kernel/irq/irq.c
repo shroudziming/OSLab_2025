@@ -76,7 +76,7 @@ void init_exception()
 void handle_page_fault(regs_context_t *regs, uint64_t stval, uint64_t scause)
 {
     // stval contains the faulting virtual address (tval)
-    printk("handle_page_fault: scause=%lu, stval=0x%lx\n", scause, stval);
+    // printk("handle_page_fault: scause=%lu, stval=0x%lx\n", scause, stval);
     uintptr_t fault_va = (uintptr_t)stval;
     uintptr_t page_va = fault_va & ~(PAGE_SIZE - 1);
 
