@@ -3,11 +3,17 @@
 #include <os/sched.h>
 #include <os/task.h>
 #include <os/kernel.h>
+
+//test for page swap
+#define TEST_FORCE_CAP_PAGES 0  // >0 时生效；设为 0 表示不限制
+static unsigned long evict_count = 0;
+static unsigned long swap_out_count = 0;
+static unsigned long swap_in_count = 0;
+
 #define TOTAL_PAGES ((FREEMEM_PA_END - FREEMEM_KERNEL_PA) / PAGE_SIZE)
-#define KERNEL_START 0x50000000
-#define KERNEL_END 0x60000000
 #define FREEMEM_KERNEL_PA 0x52000000 + PAGE_SIZE
 #define FREEMEM_PA_END 0x60000000
+// #define FREEMEM_PA_END 0x52100000   //limit to 256 pages for test
 
 #define PAGE_IDX(pa) ((pa - FREEMEM_KERNEL_PA) / PAGE_SIZE)
 #define BITMAP(pa) (PAGE_IDX(pa) >> 3)      //each 8 bit for 8 pages
@@ -18,13 +24,208 @@ static ptr_t kernMemCurr = FREEMEM_KERNEL;
 static uint8_t page_bitmap[TOTAL_PAGES / 8];
 int used_pages = 0;
 
+extern uint16_t kernel_sectors; // from loader/init
+extern uint32_t swap_start_sector;
+// swap layout configuration
+#define SWAP_SECTORS_PER_SLOT (PAGE_SIZE / SECTOR_SIZE) // 8
+// #define SWAP_SLOT_NUM 256
+// #define SWAP_SECTOR_OFFSET  (swap_start_sector - kernel_sectors)//offset after kernel sectors
+
+#define SWAP_SLOT_NUM 256
+#define SWAP_SECTOR_OFFSET  (swap_start_sector - kernel_sectors)//offset after kernel sectors
+
+// frame metadata and FIFO
+typedef struct {
+    int in_use;
+    uintptr_t owner_pgdir; // pgdir owning this frame (0 if none)
+    uintptr_t va;          // user VA of this frame (page aligned)
+    int swap_slot;         // -1 if not swapped, else slot id
+} frame_meta_t;
+
+typedef struct {
+    int used;
+    uintptr_t owner_pgdir;
+    uintptr_t va;
+} swap_entry_t;
+
+static frame_meta_t frame_meta[TOTAL_PAGES];
+static int fifo_q[TOTAL_PAGES];
+static int fifo_head = 0, fifo_tail = 0;
+static swap_entry_t swap_table[SWAP_SLOT_NUM];
+static uint32_t start_sector = 0;
+
 static inline int is_valid_pa(uintptr_t pa) {
     return (pa >= FREEMEM_KERNEL_PA && pa < FREEMEM_PA_END && ((pa & (PAGE_SIZE - 1)) == 0));
 }
 
+/* helper: push frame index to FIFO tail */
+static void fifo_push(int idx)
+{
+    fifo_q[fifo_tail] = idx;
+    fifo_tail = (fifo_tail + 1) % TOTAL_PAGES;
+}
+
+/* helper: pop FIFO head; returns -1 if empty */
+static int fifo_pop(void)
+{
+    if (fifo_head == fifo_tail) return -1;
+    int idx = fifo_q[fifo_head];
+    fifo_head = (fifo_head + 1) % TOTAL_PAGES;
+    return idx;
+}
+
+/* find swap slot for given owner_pgdir+va */
+int swap_find(uintptr_t owner_pgdir, uintptr_t va)
+{
+    for (int i = 0; i < SWAP_SLOT_NUM; i++) {
+        if (swap_table[i].used && swap_table[i].owner_pgdir == owner_pgdir && swap_table[i].va == va) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* allocate a free swap slot; returns slot or -1 */
+int swap_alloc_slot(void)
+{
+    for (int i = 0; i < SWAP_SLOT_NUM; i++) {
+        if (!swap_table[i].used) {
+            swap_table[i].used = 1;
+            swap_table[i].owner_pgdir = 0;
+            swap_table[i].va = 0;
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* free swap slot */
+void swap_free_slot(int slot)
+{
+    if (slot < 0 || slot >= SWAP_SLOT_NUM) return;
+    swap_table[slot].used = 0;
+    swap_table[slot].owner_pgdir = 0;
+    swap_table[slot].va = 0;
+}
+
+/* write pa-sized page into swap slot (slot -> sector start) */
+int swap_write_slot(int slot, uintptr_t pa)
+{
+    if (slot < 0 || slot >= SWAP_SLOT_NUM) return -1;
+    uint32_t sector = start_sector + slot * SWAP_SECTORS_PER_SLOT;
+    swap_out_count++;
+    printk("SWAP OUT: slot=%d sector=%u pa=0x%lx out_cnt=%lu\n",
+           slot, sector, (unsigned long)pa, swap_out_count);
+    // bios_sd_write expects physical mem address
+    int ret = bios_sd_write((unsigned)pa, SWAP_SECTORS_PER_SLOT, sector);
+    return ret;
+}
+
+/* read swap slot into pa */
+int swap_read_slot(int slot, uintptr_t pa)
+{
+    if (slot < 0 || slot >= SWAP_SLOT_NUM) return -1;
+    uint32_t sector = start_sector + slot * SWAP_SECTORS_PER_SLOT;
+
+    swap_in_count++;
+    printk("SWAP IN : slot=%d sector=%u pa=0x%lx in_cnt=%lu\n",
+           slot, sector, (unsigned long)pa, swap_in_count);
+
+    int ret = bios_sd_read((unsigned)pa, SWAP_SECTORS_PER_SLOT, sector);
+    return ret;
+}
+
+/* clear frame_meta for index */
+static void clear_frame_meta_index(int idx)
+{
+    if (idx < 0 || idx >= TOTAL_PAGES) return;
+    frame_meta[idx].in_use = 0;
+    frame_meta[idx].owner_pgdir = 0;
+    frame_meta[idx].va = 0;
+    frame_meta[idx].swap_slot = -1;
+}
+
+/* record a new user frame mapping (pa must be physical page aligned) */
+static void record_frame(uintptr_t pa, uintptr_t owner_pgdir, uintptr_t va)
+{
+    if (!is_valid_pa(pa)) return;
+    int idx = PAGE_IDX(pa);
+    frame_meta[idx].in_use = 1;
+    frame_meta[idx].owner_pgdir = owner_pgdir;
+    frame_meta[idx].va = va & ~(PAGE_SIZE - 1);
+    frame_meta[idx].swap_slot = -1;
+    fifo_push(idx);
+}
+
+/* find pcb by pgdir */
+static pcb_t* find_pcb_by_pgdir(uintptr_t pgdir)
+{
+    for (int i = 0; i < NUM_MAX_TASK; i++) {
+        if (pcb[i].pgdir == pgdir && pcb[i].pid != -1) return &pcb[i];
+    }
+    // also check pid0/s_pid0
+    if (pid0_pcb.pgdir == pgdir) return &pid0_pcb;
+    if (s_pid0_pcb.pgdir == pgdir) return &s_pid0_pcb;
+    return NULL;
+}
+
+/* Evict one frame (FIFO). Returns physical address of freed page (pa), or 0 on failure. */
+static uintptr_t evict_page(void)
+{
+    int tries = TOTAL_PAGES; // avoid infinite loop
+    while (tries--) {
+        int idx = fifo_pop();
+        if (idx < 0) break;
+        if (!frame_meta[idx].in_use) continue;
+        uintptr_t victim_pa = FREEMEM_KERNEL_PA + idx * PAGE_SIZE;
+        uintptr_t owner_pgdir = frame_meta[idx].owner_pgdir;
+        uintptr_t va = frame_meta[idx].va;
+        // find swap slot
+        int slot = swap_alloc_slot();
+        if (slot < 0) {
+            // no swap space
+            fifo_push(idx); // keep candidate
+            return 0;
+        }
+        // write page to swap
+        if (swap_write_slot(slot, victim_pa) < 0) {
+            swap_free_slot(slot);
+            fifo_push(idx);
+            return 0;
+        }
+
+        evict_count++;
+        // record swap ownership
+        swap_table[slot].owner_pgdir = owner_pgdir;
+        swap_table[slot].va = va;
+
+        // unmap PTE in owner pgdir
+        if (owner_pgdir != 0) {
+            // map_page_helper with pa==0 will clear the pte
+            map_page_helper(va, 0, owner_pgdir);
+        }
+
+        // clear frame meta and free page bitmap
+        clear_frame_meta_index(idx);
+        // ensure freePage clears bitmap / bzero; but we already will mark free below.
+        // call freePage to be safe (it will clear bitmap and bzero kva)
+        freePage(victim_pa);
+
+        // return the freed physical page address (caller will allocate it)
+        return victim_pa;
+    }
+
+    return 0;
+}
 
 void init_memory_manager() {
     bzero(page_bitmap, sizeof(page_bitmap)); // 清零位图
+
+    for (int i = 0; i < TOTAL_PAGES; i++) clear_frame_meta_index(i);
+    fifo_head = fifo_tail = 0;
+    for (int i = 0; i < SWAP_SLOT_NUM; i++) swap_free_slot(i);
+    // compute swap start sector
+    start_sector = (uint32_t)(kernel_sectors + SWAP_SECTOR_OFFSET);
 }
 
 ptr_t allocPage(void)
@@ -34,7 +235,12 @@ ptr_t allocPage(void)
     // kernMemCurr = ret + numPage * PAGE_SIZE;
     // return ret;
 
-    for(ptr_t pa = FREEMEM_KERNEL_PA; pa < FREEMEM_PA_END;pa += PAGE_SIZE){
+    ptr_t limit_pa = FREEMEM_PA_END;
+    if(TEST_FORCE_CAP_PAGES > 0){
+        limit_pa = FREEMEM_KERNEL_PA + TEST_FORCE_CAP_PAGES * PAGE_SIZE;
+    }
+
+    for(ptr_t pa = FREEMEM_KERNEL_PA; pa < limit_pa;pa += PAGE_SIZE){
         uint32_t idx = BITMAP(pa);
         uint8_t bit = BITMAP_OFFSET(pa);
 
@@ -45,8 +251,19 @@ ptr_t allocPage(void)
         }
     }
 
-    printk("Memory full/n");
-    assert(0); // no free page
+    uintptr_t freed_pa = evict_page();
+    if (freed_pa) {
+        // mark it as allocated now
+        uint32_t idx = BITMAP(freed_pa);
+        uint8_t bit = BITMAP_OFFSET(freed_pa);
+        if (!(page_bitmap[idx] & (1 << bit))) {
+            page_bitmap[idx] |= (1 << bit);
+            used_pages++;
+            return freed_pa;
+        }
+    }
+
+    printk("Memory full\n");
     return 0; // out of memory
 }
 
@@ -142,6 +359,11 @@ uintptr_t alloc_page_helper(uintptr_t va, uintptr_t pgdir)
     }
     set_attribute(&pte[vpn0], _PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE | _PAGE_EXEC | _PAGE_USER | _PAGE_ACCESSED | _PAGE_DIRTY);
 
+    uintptr_t phys = get_pa(pte[vpn0]);
+    if (phys) {
+        record_frame(phys, pgdir, va);
+    }
+
     return pa2kva(get_pa(pte[vpn0]));
 }
 
@@ -181,6 +403,7 @@ int map_page_helper(uintptr_t va,uintptr_t pa,uintptr_t pgdir){
         set_attribute(
             &pte[vpn0], _PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE |
                             _PAGE_EXEC | _PAGE_ACCESSED | _PAGE_DIRTY | _PAGE_USER);
+        record_frame(pa, pgdir, va);
         return 1;
     }
     return 0;
