@@ -35,7 +35,7 @@
 #define MEM_SIZE 32
 #define PAGE_SIZE 4096 // 4K
 #define INIT_KERNEL_STACK 0xffffffc052000000
-#define FREEMEM_KERNEL (INIT_KERNEL_STACK+PAGE_SIZE)
+#define FREEMEM_KERNEL (INIT_KERNEL_STACK+2*PAGE_SIZE)
 
 /* Rounding; only works for n = power of two */
 #define ROUND(a, n)     (((((uint64_t)(a))+(n)-1)) & ~((n)-1))
@@ -45,7 +45,7 @@ extern ptr_t allocPage(void);
 extern void freePage(uintptr_t pa);
 extern void free_all_pages(pcb_t *pcb);
 // TODO [P4-task1] */
-void freePage(ptr_t baseAddr);
+// void freePage(ptr_t baseAddr);
 
 // #define S_CORE
 // NOTE: only need for S-core to alloc 2MB large page
@@ -68,10 +68,24 @@ extern void init_memory_manager();
 uintptr_t shm_page_get(int key);
 void shm_page_dt(uintptr_t addr);
 
-extern int swap_find(uintptr_t owner_pgdir, uintptr_t va);
-extern int swap_alloc_slot(void);
-extern void swap_free_slot(int slot);
-extern int swap_write_slot(int slot, uintptr_t pa);
-extern int swap_read_slot(int slot, uintptr_t pa);
+#define USER_PAGE_MAX_NUM 128     // 用户“看见”的其可使用的页数
+#define KERN_PAGE_MAX_NUM 4    // 内核实际可供用户使用的页数
+
+typedef struct{
+    list_node_t lnode;
+    uint64_t uva; 
+    uint64_t pa;      // uva（原本）对应的pa  
+    int on_disk_sec;  // 若被换出，其在磁盘中的位置
+    int pgdir_id;
+}alloc_info_t;  // 记录供用户使用的内核虚地址分配的信息
+extern alloc_info_t alloc_info[USER_PAGE_MAX_NUM];
+
+extern list_head in_mem_list;
+extern list_head swap_out_list;
+extern list_head free_list;
+extern uintptr_t alloc_limit_page_helper(uintptr_t va, uintptr_t pgdir);
+extern void init_alloc_info();
+extern alloc_info_t* swapPage();
+extern ptr_t uva_allocPage(int numPage, uintptr_t uva);
 
 #endif /* MM_H */
