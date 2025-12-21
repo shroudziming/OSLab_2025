@@ -232,6 +232,7 @@ int main(void)
 
         init_memory_manager();
 
+        init_alloc_info();
         // Init jump table provided by kernel and bios(ΦωΦ)
         init_jmptab();
 
@@ -268,7 +269,6 @@ int main(void)
         init_screen();
         printk("> [INIT] SCREEN initialization succeeded.\n");
         
-        pid_t shell_pid = do_exec("shell",0,NULL);
         
         printk("> [INIT] shell initialization succeeded.\n");
         unlock_kernel();
@@ -281,6 +281,8 @@ int main(void)
 
         disable_temp_map();
         cpu_id = 0;
+
+        pid_t shell_pid = do_exec("shell",0,NULL);
     }else{
         lock_kernel();
         cpu_id = 1;
