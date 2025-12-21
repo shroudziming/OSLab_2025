@@ -102,7 +102,7 @@ uint64_t map_task(char *taskname, uintptr_t pgdir)
 
         uint64_t cur_file_off = 0;
         uint64_t user_va_base = USER_ENTRYPOINT;
-
+        // printk("Mapping task %s at pgdir %lx\n", taskname, pgdir);
         while (cur_file_off < file_size) {
             uint64_t abs_off = file_off + cur_file_off;
             uint64_t sector  = abs_off / SECTOR_SIZE;
@@ -119,7 +119,7 @@ uint64_t map_task(char *taskname, uintptr_t pgdir)
             uint64_t page_va = user_va & ~(PAGE_SIZE - 1);
 
             uintptr_t page_kva = alloc_page_helper(page_va, pgdir);
-
+            // printk("Mapped user VA %lx to KVA %lx\n", page_va, page_kva);
             memcpy(
                 (void *)(page_kva + (user_va & (PAGE_SIZE - 1))),
                 sector_buf + sec_off,
