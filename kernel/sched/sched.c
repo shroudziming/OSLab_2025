@@ -50,15 +50,12 @@ void do_scheduler(void)
     /************************************************************/
 
     // TODO: [p2-task1] Modify the current_running pointer.
-    cpu_id = get_current_cpu_id();
     pcb_t *prev = current_running[cpu_id];
 
     if(current_running[cpu_id]->pid != -1 && current_running[cpu_id]->pid != 0){
         if(prev->status == TASK_RUNNING){
             prev->status = TASK_READY;
             list_add_tail(&prev->list, &ready_queue);
-        }else if(prev->status == TASK_EXITED && prev->pid != -1){
-            do_exit();
         }
     }
     
@@ -115,16 +112,11 @@ void do_unblock(list_node_t *pcb_node)
 list_node_t *get_ready_node(){
     list_node_t *temp = ready_queue.next;
     pcb_t *p = get_pcb_by_node(temp);
-    if(p->status == TASK_EXITED){
-        list_del(temp);
-        release_pcb(p);
-        return get_ready_node();
+    if(temp == &ready_queue){
+        return cpu_id ? &s_pid0_pcb.list : &pid0_pcb.list;
     }
-    if(temp != &ready_queue){
-        list_del(temp);
-        return temp;
-    }
-    return cpu_id ? &s_pid0_pcb.list : &pid0_pcb.list;
+    list_del(temp);
+    return temp;
 }
 
 pid_t do_exec(char *name, int argc, char *argv[]){
@@ -143,7 +135,7 @@ pid_t do_exec(char *name, int argc, char *argv[]){
         return -1;
     }
 
-    uintptr_t pgdir = pa2kva(allocPage());
+    uintptr_t pgdir = allocPage();
     // printk("pgdir at %lx\n",pgdir);
     *(uint64_t *)pgdir = 0;
     // clear page table
@@ -165,7 +157,7 @@ pid_t do_exec(char *name, int argc, char *argv[]){
     p->cursor_x = 0;
     p->cursor_y = 0;
     p->pgdir = pgdir;
-    p->kernel_sp = (reg_t)(pa2kva(allocPage()) + PAGE_SIZE);
+    p->kernel_sp = (reg_t)(allocPage() + PAGE_SIZE);
 
     // === setup user stack: pre-allocate USER_STACK_PAGES pages ===
     // allocate pages covering virtual addresses:
@@ -253,13 +245,9 @@ void release_pcb(pcb_t *p){
 
     free_block_list(&p->wait_list);
     //free pages
-    if (p->pgdir && p->pgdir != pa2kva(PGDIR_PA)) {
-        // printk("free_user_pages for pid=%d pgdir=%lx\n", old_pid, (unsigned long)p->pgdir);
-        free_all_pages(p);
-        // optionally reset to kernel pgdir as safe default
-        p->pgdir = pa2kva(PGDIR_PA);
-        // printk("free done\n");
-    }
+    free_all_pages(p);
+
+    freePage(kva2pa(p->kernel_sp - 8)); //free kernel stack(-8 means just in stack region)
 }
 
 void free_block_list(list_head *list){
@@ -288,29 +276,12 @@ void do_exit(void){
 
 int do_kill(pid_t pid){
     pcb_t *p = get_pcb_by_pid(pid);
-    if(p == NULL){
-        return 0;   //failed
-    }
-    if(p->status != TASK_EXITED){
-        if(p->run_cpu_id != cpu_id){
-            // target running on other CPU
-            p->status = TASK_EXITED;
-        } else {
-            // target running on this CPU
-            if (p == current_running[cpu_id]) {
-                // the process kills itself
-                do_exit();
-            } else {
-                p->status = TASK_EXITED;
-            }
-        }
-    } else {
-        // not running: safe to mark and release
+    if(p->status != TASK_EXITED && p->pid == pid){
+        p->status = TASK_EXITED;
         release_pcb(p);
         return 1;
     }
-
-    return 1;   //success
+    return 0;
 }
 
 int do_waitpid(pid_t pid){
