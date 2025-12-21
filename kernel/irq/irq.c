@@ -75,70 +75,8 @@ void init_exception()
 
 void handle_page_fault(regs_context_t *regs, uint64_t stval, uint64_t scause)
 {
-    // stval contains the faulting virtual address (tval)
-    // printk("handle_page_fault: scause=%lu, stval=0x%lx\n", scause, stval);
-    uintptr_t fault_va = (uintptr_t)stval;
-    uintptr_t page_va = fault_va & ~(PAGE_SIZE - 1);
-
-    // current running process
-    pcb_t *cur = current_running[cpu_id];
-    if (!cur) {
-        printk("page fault but no current pcb\n");
-        assert(0);
-        return;
-    }
-
-    uintptr_t pgdir = cur->pgdir;
-    if (!pgdir) {
-        printk("page fault: current has no pgdir\n");
-        assert(0);
-        return;
-    }
-
-    // If the page was swapped out previously, read it back
-    int slot = swap_find(pgdir, page_va);
-    if (slot >= 0) {
-        // allocate a physical page
-        ptr_t pa = allocPage();
-        if (!pa) {
-            // OOM and cannot evict -> panic for now
-            printk("handle_page_fault: cannot alloc page for swap-in\n");
-            assert(0);
-            return;
-        }
-        // map the physical page into the process page table
-        if (!map_page_helper(page_va, pa, pgdir)) {
-            printk("handle_page_fault: map_page_helper failed\n");
-            assert(0);
-            return;
-        }
-        // read from swap into pa (pa is physical)
-        if (swap_read_slot(slot, pa) < 0) {
-            printk("handle_page_fault: swap_read_slot failed\n");
-            assert(0);
-            return;
-        }
-        // free swap slot
-        swap_free_slot(slot);
-        return;
-    }
-
-    // otherwise this is a first-time allocation (stack/bss/new page)
-    ptr_t pa = allocPage();
-    if (!pa) {
-        printk("handle_page_fault: OOM on first-time page alloc\n");
-        assert(0);
-        return;
-    }
-
-    if (!map_page_helper(page_va, pa, pgdir)) {
-        printk("handle_page_fault: map_page_helper failed for new page\n");
-        assert(0);
-        return;
-    }
-
-    // zero the new page content
-    bzero((void *)pa2kva(pa), PAGE_SIZE);
+    alloc_limit_page_helper(stval, current_running[cpu_id]->pgdir);
+    local_flush_tlb_all();
 }
 
 void handle_other(regs_context_t *regs, uint64_t stval, uint64_t scause)
