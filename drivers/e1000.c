@@ -127,7 +127,21 @@ void e1000_init(void)
 int e1000_transmit(void *txpacket, int length)
 {
     /* TODO: [p5-task1] Transmit one packet from txpacket */
-
+    local_flush_dcache();
+    int tdt = e1000_read_reg(e1000,E1000_TDT);
+    if((tx_desc_array[tdt].status & E1000_TXD_STAT_DD) == 0){
+        return 0; 
+    }
+    tx_desc_array[tdt].length = length > TX_PKT_SIZE ? TX_PKT_SIZE : length;
+    tx_desc_array[tdt].status = 0;
+    char* buff = tx_pkt_buffer[tdt];
+    memcpy((uint8_t *)buff, (const uint8_t *)txpacket, tx_desc_array[tdt].length);
+    if(tx_desc_array[tdt].length == length){
+        tx_desc_array[tdt].cmd |= E1000_TXD_CMD_EOP;
+    }
+    tdt = (tdt + 1) % TXDESCS;
+    e1000_write_reg(e1000,E1000_TDT,tdt);
+    local_flush_dcache();
     return 0;
 }
 
