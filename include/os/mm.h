@@ -88,4 +88,6 @@ extern void init_alloc_info();
 extern alloc_info_t* swapPage();
 extern ptr_t uva_allocPage(int numPage, uintptr_t uva);
 
+extern int kernel_map_page_helper(uintptr_t va,uintptr_t pa,uintptr_t pgdir);
+
 #endif /* MM_H */
