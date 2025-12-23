@@ -45,7 +45,7 @@ int kernel_map_page_helper(uintptr_t va,uintptr_t pa,uintptr_t pgdir){
         pmd[vpn1]=0;
         return 1;
     }else if(pmd[vpn1]==0){
-        setpfn(&pmd[vpn1], pa >> NORMAL_PAGE_SHIFT);
+        set_pfn(&pmd[vpn1], pa >> NORMAL_PAGE_SHIFT);
         set_attribute(&pmd[vpn1], _PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE |
                             _PAGE_EXEC | _PAGE_ACCESSED | _PAGE_DIRTY);
         return 1;
