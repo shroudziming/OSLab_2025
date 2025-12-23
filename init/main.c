@@ -12,12 +12,17 @@
 #include <os/mm.h>
 #include <os/time.h>
 #include <os/smp.h>
+#include <os/ioremap.h>
+#include <os/net.h>
 #include <sys/syscall.h>
 #include <screen.h>
+#include <e1000.h>
 #include <printk.h>
 #include <assert.h>
 #include <type.h>
 #include <csr.h>
+#include <plic.h>
+
 
 #define VERSION_BUF 50
 
@@ -233,12 +238,37 @@ int main(void)
         init_memory_manager();
 
         init_alloc_info();
+
+        // Read Flatten Device Tree (｡•ᴗ-)_
+        time_base = bios_read_fdt(TIMEBASE);
+        e1000 = (volatile uint8_t *)bios_read_fdt(ETHERNET_ADDR);
+        uint64_t plic_addr = bios_read_fdt(PLIC_ADDR);
+        uint32_t nr_irqs = (uint32_t)bios_read_fdt(NR_IRQS);
+        printk("> [INIT] e1000: %lx, plic_addr: %lx, nr_irqs: %lx.\n", e1000, plic_addr, nr_irqs);
+
+        // IOremap
+        plic_addr = (uintptr_t)ioremap((uint64_t)plic_addr, 0x4000 * NORMAL_PAGE_SIZE);
+        e1000 = (uint8_t *)ioremap((uint64_t)e1000, 8 * NORMAL_PAGE_SIZE);
+        printk("> [INIT] IOremap initialization succeeded.\n");
+
+        
         // Init jump table provided by kernel and bios(ΦωΦ)
         init_jmptab();
 
-
         // Init task information (〃'▽'〃)
         init_task_info();
+        
+        // TODO: [p5-task4] Init plic
+        // plic_init(plic_addr, nr_irqs);
+        // printk("> [INIT] PLIC initialized successfully. addr = 0x%lx, nr_irqs=0x%x\n", plic_addr, nr_irqs);
+
+        // Init network device
+        e1000_init();
+        printk("> [INIT] E1000 device initialized successfully.\n");
+
+        // Init system call table (0_0)
+        init_syscall();
+        printk("> [INIT] System call initialized successfully.\n");
 
 
         // Init Process Control Blocks |•'-'•) ✧
