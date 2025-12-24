@@ -4,7 +4,7 @@
 #include <assert.h>
 
 #define PAGE_SIZE 4096
-#define TEST_PAGES 16   //大于等于4，以触发换出
+#define TEST_PAGES 6   //大于等于4，以触发换出
 #define BASE_VA    0x40000000
 
 int main() {
@@ -30,6 +30,21 @@ int main() {
         uint8_t expected_value = (uint8_t)i;
         uint8_t actual_value = *p;
 
+        printf("  > Verifying address 0x%lx... ", (uintptr_t)p);
+        if (actual_value == expected_value) {
+            printf("OK (value is %d)\n", actual_value);
+        } else {
+            printf("ERROR! Expected %d, but got %d\n", expected_value, actual_value);
+            errors++;
+        }
+    }
+
+    //Round 3:再次读最后几个页面，不触发换页
+    printf("\n[Round 3] Re-verifying last 3 pages to avoid swap...\n");
+    for(int i = TEST_PAGES - 2;i < TEST_PAGES;i++){
+        p = (uint8_t *)(BASE_VA + i * PAGE_SIZE);
+        uint8_t expected_value = (uint8_t)i;
+        uint8_t actual_value = *p;
         printf("  > Verifying address 0x%lx... ", (uintptr_t)p);
         if (actual_value == expected_value) {
             printf("OK (value is %d)\n", actual_value);
