@@ -237,10 +237,21 @@ int main(void)
 
         lock_kernel();
 
+        // Init jump table provided by kernel and bios(ΦωΦ)
+        init_jmptab();
+
+
         init_memory_manager();
 
         init_alloc_info();
 
+        // Init task information (〃'▽'〃)
+        init_task_info();
+
+        // Init Process Control Blocks |•'-'•) ✧
+        init_pcb();
+        printk("> [INIT] PCB initialization succeeded.\n");
+        
         // Read Flatten Device Tree (｡•ᴗ-)_
         time_base = bios_read_fdt(TIMEBASE);
         e1000 = (volatile uint8_t *)bios_read_fdt(ETHERNET_ADDR);
@@ -254,12 +265,6 @@ int main(void)
         printk("> [INIT] IOremap initialization succeeded.\n");
 
         
-        // Init jump table provided by kernel and bios(ΦωΦ)
-        init_jmptab();
-
-        // Init task information (〃'▽'〃)
-        init_task_info();
-        
         // TODO: [p5-task4] Init plic
         // plic_init(plic_addr, nr_irqs);
         // printk("> [INIT] PLIC initialized successfully. addr = 0x%lx, nr_irqs=0x%x\n", plic_addr, nr_irqs);
@@ -272,10 +277,6 @@ int main(void)
         init_syscall();
         printk("> [INIT] System call initialized successfully.\n");
 
-
-        // Init Process Control Blocks |•'-'•) ✧
-        init_pcb();
-        printk("> [INIT] PCB initialization succeeded.\n");
 
         // Read CPU frequency (｡•ᴗ-)_
         time_base = bios_read_fdt(TIMEBASE);
