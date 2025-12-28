@@ -91,16 +91,44 @@ static void e1000_configure_tx(void)
 static void e1000_configure_rx(void)
 {
     /* TODO: [p5-task2] Set e1000 MAC Address to RAR[0] */
-
+    uint32_t ra_low = enetaddr[0]
+                    | (enetaddr[1] << 8)
+                    | (enetaddr[2] << 16)
+                    | (enetaddr[3] << 24);
+    uint32_t ra_high = enetaddr[4]
+                    | (enetaddr[5] << 8)
+                    | E1000_RAH_AV; //Address Valid
+    e1000_write_reg_array(e1000, E1000_RA, 0, ra_low);
+    e1000_write_reg_array(e1000, E1000_RA, 1, ra_high);
     /* TODO: [p5-task2] Initialize rx descriptors */
-
+    for(int i = 0; i < RXDESCS; i++){
+        rx_desc_array[i].addr = kva2pa((uintptr_t)&rx_pkt_buffer[i]);
+        rx_desc_array[i].status = 0;
+        rx_desc_array[i].length = 0;
+        rx_desc_array[i].csum = 0;
+        rx_desc_array[i].errors = 0;
+        rx_desc_array[i].special = 0;
+    }
     /* TODO: [p5-task2] Set up the Rx descriptor base address and length */
-
+    uint64_t rx_base_addr = kva2pa((uintptr_t)rx_desc_array);
+    uint32_t rx_addr_low = (uint32_t)(rx_base_addr & 0xFFFFFFFF);
+    uint32_t rx_addr_high = (uint32_t)(rx_base_addr >> 32);
+    e1000_write_reg(e1000, E1000_RDBAL, rx_addr_low);
+    e1000_write_reg(e1000, E1000_RDBAH, rx_addr_high);
+    e1000_write_reg(e1000, E1000_RDLEN, RXDESCS * sizeof(struct e1000_rx_desc));
     /* TODO: [p5-task2] Set up the HW Rx Head and Tail descriptor pointers */
-
+    e1000_write_reg(e1000, E1000_RDH, 0);
+    e1000_write_reg(e1000, E1000_RDT, RXDESCS - 1);
     /* TODO: [p5-task2] Program the Receive Control Register */
-
+    e1000_write_reg(e1000, E1000_RCTL,
+        E1000_RCTL_EN |
+        E1000_RCTL_BAM |
+        E1000_RCTL_SZ_2048
+        );
+    //no BSEX & BSIZE to set 2048 bytes
     /* TODO: [p5-task4] Enable RXDMT0 Interrupt */
+
+    local_flush_dcache();
 }
 
 /**
@@ -153,6 +181,20 @@ int e1000_transmit(void *txpacket, int length)
 int e1000_poll(void *rxbuffer)
 {
     /* TODO: [p5-task2] Receive one packet and put it into rxbuffer */
-
-    return 0;
+    int tail = (e1000_read_reg(e1000,E1000_RDT) + 1) % RXDESCS;
+    if((rx_desc_array[tail].status & E1000_RXD_STAT_DD) == 0){
+        return 0;
+    }
+    int length = rx_desc_array[tail].length;
+    if(length > RX_PKT_SIZE){
+        length = RX_PKT_SIZE;
+    }
+    //copy packet to rxbuffer
+    memcpy((uint8_t *)rxbuffer, (const uint8_t *)rx_pkt_buffer[tail], (uint32_t)length);
+    //DD set to 0
+    rx_desc_array[tail].status = 0;
+    rx_desc_array[tail].length = 0;
+    e1000_write_reg(e1000,E1000_RDT,tail);
+    local_flush_dcache();
+    return length;
 }
