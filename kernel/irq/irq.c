@@ -4,6 +4,8 @@
 #include <os/string.h>
 #include <os/kernel.h>
 #include <os/mm.h>
+#include <os/net.h>
+#include <plic.h>
 #include <printk.h>
 #include <assert.h>
 #include <screen.h>
@@ -48,6 +50,11 @@ void handle_irq_ext(regs_context_t *regs, uint64_t stval, uint64_t scause)
 {
     // TODO: [p5-task4] external interrupt handler.
     // Note: plic_claim and plic_complete will be helpful ...
+    int id = plic_claim();
+    if(id == 3 || id == 33){
+        net_handle_irq();
+    }
+    plic_complete(id);
 }
 
 void init_exception()
@@ -72,7 +79,7 @@ void init_exception()
     irq_table[IRQC_S_TIMER] = handle_irq_timer;
     irq_table[IRQC_M_TIMER] = handle_other;
     irq_table[IRQC_U_EXT] = handle_other;
-    irq_table[IRQC_S_EXT] = handle_other;
+    irq_table[IRQC_S_EXT] = handle_irq_ext;
     irq_table[IRQC_M_EXT] = handle_other;
 
     /* TODO: [p2-task3] set up the entrypoint of exceptions */
