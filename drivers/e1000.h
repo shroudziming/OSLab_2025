@@ -435,6 +435,9 @@ struct e1000_tx_desc {
 /* E1000 Base Address Pointer */
 extern volatile uint8_t *e1000;
 
+extern struct e1000_tx_desc tx_desc_array[TXDESCS] __attribute__((aligned(16)));
+extern struct e1000_rx_desc rx_desc_array[RXDESCS] __attribute__((aligned(16)));
+
 /* E1000 Function Definitions */
 void e1000_init(void);
 int e1000_transmit(void *txpacket, int length);
