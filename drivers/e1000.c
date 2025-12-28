@@ -2,6 +2,8 @@
 #include <type.h>
 #include <os/string.h>
 #include <os/time.h>
+#include <os/list.h>
+#include <os/sched.h>
 #include <assert.h>
 #include <pgtable.h>
 
@@ -9,8 +11,8 @@
 volatile uint8_t *e1000;  // use virtual memory address
 
 // E1000 Tx & Rx Descriptors
-static struct e1000_tx_desc tx_desc_array[TXDESCS] __attribute__((aligned(16)));
-static struct e1000_rx_desc rx_desc_array[RXDESCS] __attribute__((aligned(16)));
+struct e1000_tx_desc tx_desc_array[TXDESCS] __attribute__((aligned(16)));
+struct e1000_rx_desc rx_desc_array[RXDESCS] __attribute__((aligned(16)));
 
 // E1000 Tx & Rx packet buffer
 static char tx_pkt_buffer[TXDESCS][TX_PKT_SIZE];
@@ -127,6 +129,7 @@ static void e1000_configure_rx(void)
         );
     //no BSEX & BSIZE to set 2048 bytes
     /* TODO: [p5-task4] Enable RXDMT0 Interrupt */
+    e1000_write_reg(e1000, E1000_IMS, E1000_IMS_RXDMT0);
 
     local_flush_dcache();
 }
@@ -167,10 +170,11 @@ int e1000_transmit(void *txpacket, int length)
     if(tx_desc_array[tdt].length == length){
         tx_desc_array[tdt].cmd |= E1000_TXD_CMD_EOP;
     }
+    int len = tx_desc_array[tdt].length;
     tdt = (tdt + 1) % TXDESCS;
     e1000_write_reg(e1000,E1000_TDT,tdt);
     local_flush_dcache();
-    return 0;
+    return len;
 }
 
 /**
@@ -181,6 +185,7 @@ int e1000_transmit(void *txpacket, int length)
 int e1000_poll(void *rxbuffer)
 {
     /* TODO: [p5-task2] Receive one packet and put it into rxbuffer */
+    local_flush_dcache();
     int tail = (e1000_read_reg(e1000,E1000_RDT) + 1) % RXDESCS;
     if((rx_desc_array[tail].status & E1000_RXD_STAT_DD) == 0){
         return 0;
