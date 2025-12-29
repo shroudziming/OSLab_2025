@@ -313,7 +313,6 @@ int main(void)
         (unsigned int)get_current_cpu_id());
 
         disable_temp_map();
-        cpu_id = 0;
 
         pid_t shell_pid = do_exec("shell",0,NULL);
     }else{
