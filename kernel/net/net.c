@@ -68,7 +68,8 @@ void e1000_handle_irq(void)
         e1000_write_reg(e1000, E1000_IMC, E1000_IMS_TXQE);
         //unblock send queue
         free_block_list(&send_block_queue);
-    }else if(cause & E1000_ICR_RXDMT0){
+    }
+    if(cause & E1000_ICR_RXDMT0){
         //release recv blocked pcbs
         free_block_list(&recv_block_queue);
     }
