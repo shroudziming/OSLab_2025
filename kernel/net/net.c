@@ -37,16 +37,17 @@ int do_net_recv(void *rxbuffer, int pkt_num, int *pkt_lens)
         return 0;
     }
     int recvlens = 0;
-    for(int i = 0; i < pkt_num; i++) {
-        int len;
-        while((len = e1000_poll((uint8_t *)rxbuffer + recvlens)) <= 0) {
+    for(int i = 0; i < pkt_num;) {
+        pkt_lens[i] = e1000_poll(rxbuffer);
+        if(pkt_lens[i] == 0){
+            e1000_write_reg(e1000, E1000_IMS, E1000_IMS_RXDMT0); //enable RXDMT0 interrupt
+            local_flush_dcache();
             do_block(&current_running[cpu_id]->list, &recv_block_queue);
-            // continue;
+            continue;
         }
-        if(pkt_lens != NULL) {
-            pkt_lens[i] = len;
-        }
-        recvlens += len;
+        rxbuffer += pkt_lens[i];
+        recvlens += pkt_lens[i];
+        i++;
     }
     // TODO: [p5-task3] Call do_block when there is no packet on the way
 
@@ -62,15 +63,19 @@ void net_handle_irq(void)
 
 void e1000_handle_irq(void)
 {
+    local_flush_dcache();
     uint32_t cause = e1000_read_reg(e1000, E1000_ICR);
     if(cause & E1000_ICR_TXQE){
-        //TXQE interrupt shut
-        e1000_write_reg(e1000, E1000_IMC, E1000_IMS_TXQE);
         //unblock send queue
         free_block_list(&send_block_queue);
+        //TXQE interrupt shut
+        e1000_write_reg(e1000, E1000_IMC, E1000_IMS_TXQE);
+        local_flush_dcache();
     }
     if(cause & E1000_ICR_RXDMT0){
         //release recv blocked pcbs
         free_block_list(&recv_block_queue);
+        e1000_write_reg(e1000, E1000_IMC, E1000_IMS_RXDMT0);
+        local_flush_dcache();
     }
 }
