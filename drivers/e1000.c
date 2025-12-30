@@ -80,8 +80,8 @@ static void e1000_configure_tx(void)
     e1000_write_reg(e1000, E1000_TCTL,
         E1000_TCTL_EN |                //enable tx
         E1000_TCTL_PSP |
-        E1000_TCTL_CT & (0x10 << 4) |
-        E1000_TCTL_COLD & (0x40 << 12)
+        (E1000_TCTL_CT & (0x10 << 4)) |
+        (E1000_TCTL_COLD & (0x40 << 12))
     );
 
     local_flush_dcache();
