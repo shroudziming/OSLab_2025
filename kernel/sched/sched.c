@@ -45,9 +45,6 @@ void do_scheduler(void)
 {
     // TODO: [p2-task3] Check sleep queue to wake up PCBs
     check_sleeping();
-    /************************************************************/
-    // TODO: [p5-task3] Check send/recv queue to unblock PCBs
-    /************************************************************/
 
     // TODO: [p2-task1] Modify the current_running pointer.
     pcb_t *prev = current_running[cpu_id];
