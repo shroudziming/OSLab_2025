@@ -45,17 +45,24 @@ void shell_kill();
 void shell_waitpid();
 void shell_unknown();
 void shell_clear();
+void shell_cd();
+void set_cmdline();
 
 char input_buffer[INPUT_BUFFER_SIZE];
 char args[ARG_NUM][ARG_LEN];
 char *arg_ptr[ARG_NUM];
+char current_dir[30];
+char cmd_line[50];
+
+char * prefix = "> root@UCAS_OS:~";
 int arg_count = 0;
 int input_buffer_index = 0;
 int main(void)
 {
     sys_move_cursor(0, SHELL_BEGIN);
+    set_cmdline();
     printf("------------------- COMMAND -------------------\n");
-    printf("> root@UCAS_OS: ");
+    printf(cmd_line);
     int temp;
     for(int i = 0; i < ARG_NUM; i++){
         arg_ptr[i] = args[i];
@@ -95,18 +102,10 @@ int main(void)
                     args[i][j] = '\0';
                 }
             }
-            printf("> root@UCAS_OS: ");
+            printf(cmd_line);
         }else{
             input_buffer[input_buffer_index++] = temp;
         }
-
-        // TODO [P3-task1]: ps, exec, kill, clear    
-
-        /************************************************************/
-        // TODO [P6-task1]: mkfs, statfs, cd, mkdir, rmdir, ls
-
-        // TODO [P6-task2]: touch, cat, ln, ls -l, rm
-        /************************************************************/
     }
 
     return 0;
@@ -157,6 +156,36 @@ void handle_shell_command(char *input){
         shell_clear();
     else if(strcmp("waitpid", args[0])==0)
         shell_waitpid();
+    else if(strcmp("mkfs", args[0])==0)
+        if(strcmp(args[1],"-f")==0)
+            sys_mkfs(1);
+        else
+            sys_mkfs(0);
+    else if(strcmp("mkdir",args[0])==0){
+        if(sys_mkdir(args[1]))
+            printf("\nInfo: mkdir %s failed\n",args[1]);
+    }
+    else if(strcmp("rmdir",args[0])==0)
+        sys_rmdir(args[1]);
+    else if(strcmp("ls",args[0])){
+        int ret;
+        if(strcmp(args[1],"-l")==0){
+            ret = sys_ls(args[2],1);
+        }else{
+            ret = sys_ls(args[1],0);
+        }
+    }else if(strcmp("statfs",args[0])==0)
+        sys_statfs();
+    else if(strcmp("cd",args[0])==0)
+        shell_cd();
+    else if(strcmp("touch",args[0])==0)
+        sys_touch(args[1]);
+    else if(strcmp("cat",args[0])==0)
+        sys_cat(args[1]);
+    else if(strcmp("ln",args[0])==0)
+        sys_ln(args[1],args[2]);
+    else if(strcmp("rm",args[0])==0)
+        sys_rm(args[1]);
     else
         shell_unknown();
 }
@@ -204,4 +233,42 @@ void shell_clear(){
     sys_clear();
     sys_move_cursor(0, SHELL_BEGIN);
     printf("------------------- COMMAND -------------------\n");
+}
+
+void shell_cd(){
+    if(sys_cd(args[1]))
+        return;
+    int i=0;
+    while(i < strlen(args[1])){
+        char name[16];
+        int j=0;
+        for(j=0;i < strlen(args[1]);j++){
+            if(args[1][i] == '/'){
+                i++;
+                break;
+            }
+            name[j]=args[1][i];
+        }
+        name[j]='\0';
+        if(strcmp(name,".")==0)
+            continue;
+        else if(strcmp(name,"..")==0){
+            //go back
+            if(strlen(current_dir)==0)
+                continue;
+            int k;
+            for(k=strlen(current_dir)-1;k>=0 && current_dir[k] != '/';k--);
+            current_dir[k]='\0';
+        }else{
+            strcat(current_dir,"/");
+            strcat(current_dir,name);
+        }
+    }
+    set_cmdline();
+}
+
+void set_cmdline(){
+    strcpy(cmd_line,prefix);
+    strcat(cmd_line,current_dir);
+    strcat(cmd_line,"$ ");
 }
