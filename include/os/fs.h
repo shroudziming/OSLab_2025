@@ -95,12 +95,14 @@ typedef struct fdesc {
 #define SEEK_END 2
 
 /* fs function declarations */
-extern int do_mkfs(void);
+extern int do_mkfs(int force);
 extern int do_statfs(void);
 extern int do_cd(char *path);
 extern int do_mkdir(char *path);
 extern int do_rmdir(char *path);
 extern int do_ls(char *path, int option);
+extern int do_touch(char *path);
+extern int do_cat(char *path);
 extern int do_open(char *path, int mode);
 extern int do_read(int fd, char *buff, int length);
 extern int do_write(int fd, char *buff, int length);
