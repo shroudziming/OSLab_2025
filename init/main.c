@@ -14,6 +14,7 @@
 #include <os/smp.h>
 #include <os/ioremap.h>
 #include <os/net.h>
+#include <os/fs.h>
 #include <sys/syscall.h>
 #include <screen.h>
 #include <e1000.h>
@@ -197,6 +198,22 @@ static void init_syscall(void)
     syscall[SYSCALL_NET_SEND]       = (long (*)())do_net_send;
     syscall[SYSCALL_NET_RECV]       = (long (*)())do_net_recv;
     syscall[SYSCALL_PUTCHAR]        = (long (*)())screen_putchar;
+
+    syscall[SYSCALL_FS_MKFS]         =  (long (*)())do_mkfs;
+    syscall[SYSCALL_FS_STATFS]       =  (long (*)())do_statfs;
+    syscall[SYSCALL_FS_CD]          =  (long (*)())do_cd;
+    syscall[SYSCALL_FS_MKDIR]       =  (long (*)())do_mkdir;
+    syscall[SYSCALL_FS_RMDIR]       =  (long (*)())do_rmdir;
+    syscall[SYSCALL_FS_LS]          =  (long (*)())do_ls;
+    syscall[SYSCALL_FS_TOUCH]       =  (long (*)())do_touch;
+    syscall[SYSCALL_FS_CAT]         =  (long (*)())do_cat;
+    syscall[SYSCALL_FS_OPEN]        =  (long (*)())do_open;
+    syscall[SYSCALL_FS_READ]        =  (long (*)())do_read;
+    syscall[SYSCALL_FS_WRITE]       =  (long (*)())do_write;
+    syscall[SYSCALL_FS_CLOSE]       =  (long (*)())do_close;
+    syscall[SYSCALL_FS_LN]          =  (long (*)())do_ln;
+    syscall[SYSCALL_FS_RM]          =  (long (*)())do_rm;
+    syscall[SYSCALL_FS_LSEEK]      =  (long (*)())do_lseek;
 }
 /************************************************************/
 
