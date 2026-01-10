@@ -3,10 +3,86 @@
 
 static fdesc_t fdesc_array[NUM_FDESCS];
 
-int do_mkfs(void)
+static superblock_t superblock;
+static inode_t current_inode;
+static char imap[INODE_MAP_SEC_NUM*SECTOR_SIZE];
+static char bmap[BLOCK_MAP_SEC_NUM*SECTOR_SIZE];
+static char buffer_f[SECTOR_SIZE];
+static char buffer_s[SECTOR_SIZE];
+static char level_buffer[3][SECTOR_SIZE];
+
+int do_mkfs(int force)
 {
     // TODO [P6-task1]: Implement do_mkfs
+    if(force){
+        // format the disk
+        int block_num = CEIL(DATA_BLOCK_OFFSET * SECTOR_SIZE, BLOCK_SIZE);
+        //clear memory
+        bzero((char *)&superblock, sizeof(inode_t));
+        bzero((char *)&current_inode, sizeof(inode_t));
+        //clear disk
+        bzero(buffer_f,BLOCK_SIZE);
+        for(int i=0;i<block_num;i++){
+            bios_sd_write(kva2pa(buffer_f),BLOCK_SIZE / SECTOR_SIZE, FS_START_SECTOR + i);
+        }
+        printk("[mkfs] clean disk done.\n");
+    }else if(if_fs_exist()){
+        printk("[mkfs] filesystem already exists. use 'mkfs -f' to force format.\n");
+        return 1;  // do_mkfs fails
+    }
+    printk("[mkfs] start making filesystem...\n");
+    printk("[mkfs] setting superblock...\n");
+    //setup superblock
+    superblock.magic = SUPERBLOCK_MAGIC;
+    superblock.fs_start_sec = FS_START_SECTOR;
+    superblock.fs_size_blocks = FS_SIZE * SECTOR_SIZE / BLOCK_SIZE;
+    superblock.block_map_offset = BLOCK_MAP_OFFSET;
+    superblock.inode_map_offset = INODE_MAP_OFFSET;
+    superblock.inode_offset = INODE_OFFSET;
+    superblock.data_block_offset = DATA_BLOCK_OFFSET;
+    superblock.inode_num = INODE_NUM;
+    superblock.data_block_num = DATA_BLOCK_NUM;
+    //print out superblock info
+    printk("\t magic: 0x%x\n", superblock.magic);
+    printk("\t num sector: %d, start sector: %d\n", superblock.fs_size_blocks, superblock.fs_start_sec);
+    printk("\t block map offset: %d(%d)\n", superblock.block_map_offset, BLOCK_MAP_SEC_NUM);
+    printk("\t inode map offset: %d(%d)\n", superblock.inode_map_offset, INODE_MAP_SEC_NUM);
+    printk("\t inode offset: %d(%d), inode num: %d\n", superblock.inode_offset, INODE_SEC_NUM, superblock.inode_num);
+    printk("\t data offset: %d(%d), data block num: %d\n", superblock.data_block_offset, DATA_BLOCK_SEC_NUM, superblock.data_block_num);
+    //write superblock to disk
+    bios_sd_write(kva2pa(&superblock), 1, FS_START_SECTOR);
+    //initialize inode map
+    bzero(imap,INODE_MAP_SEC_NUM*SECTOR_SIZE);
+    bios_sd_write(kva2pa(imap), INODE_MAP_SEC_NUM, FS_START_SECTOR + INODE_MAP_OFFSET);
+    //initialize block map
+    bzero(bmap,BLOCK_MAP_SEC_NUM*SECTOR_SIZE);
+    bios_sd_write(kva2pa(bmap), BLOCK_MAP_SEC_NUM, FS_START_SECTOR + BLOCK_MAP_OFFSET);
 
+    //create root directory
+    //allocate inode 0
+    int root_ino = alloc_inode();
+    //create dentry
+    bzero(buffer_f, SECTOR_SIZE);
+    dentry_t *dentry = (dentry_t *)buffer_f;
+    strcpy(dentry[0].filename, ".");
+    strcpy(dentry[1].filename, "..");
+    dentry[0].ino = root_ino;
+    dentry[1].ino = root_ino;
+    //allocate data block
+    uint32_t data_block_addr;
+    alloc_block(&data_block_addr,1);
+    bios_sd_write(kva2pa(buffer_f),1, data_block_addr);
+    //setup inode
+    inode_t *root_inode = ino2inode(root_ino);
+    *root_inode = set_inode(DIR,O_RDWR,root_ino);
+    root_inode->size = 2 * sizeof(dentry_t);
+    root_inode->direct_addr[0] = data_block_addr;
+    current_inode = *root_inode;    // set current inode to root
+    int offset = root_ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa(buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+    //initialize file descriptor array
+    bzero(fdesc_array, sizeof(fdesc_t) * NUM_FDESCS);
+    printk("[mkfs] make filesystem done.\n");
     return 0;  // do_mkfs succeeds
 }
 
@@ -44,6 +120,20 @@ int do_ls(char *path, int option)
     // Note: argument 'option' serves for 'ls -l' in A-core
 
     return 0;  // do_ls succeeds
+}
+
+int do_touch(char *path)
+{
+    // TODO [P6-task2]: Implement do_touch
+
+    return 0;  // do_touch succeeds
+}
+
+int do_cat(char *path)
+{
+    // TODO [P6-task2]: Implement do_cat
+
+    return 0;  // do_cat succeeds
 }
 
 int do_open(char *path, int mode)
@@ -93,4 +183,75 @@ int do_lseek(int fd, int offset, int whence)
     // TODO [P6-task2]: Implement do_lseek
 
     return 0;  // the resulting offset location from the beginning of the file
+}
+
+//alloc inode, return inode number
+int alloc_inode(){
+    int i,j;
+    int mask=1;
+    for(i=0;i<INODE_MAP_SEC_NUM*SECTOR_SIZE;i++){
+        for(int j=0;j<8;j++,mask<<=1){
+            if((imap[i] & mask) == 0){
+                imap[i] |= mask;
+                bios_sd_write(kva2pa(imap), INODE_MAP_SEC_NUM, FS_START_SECTOR + INODE_MAP_OFFSET);
+                return i*8 + j;
+            }
+        }
+    }
+    return -1; //no free inode
+}
+
+
+int alloc_block(uint32_t *addr_array,int num){
+    static int i,j=0;
+    static int mask=1;
+    int count=0;
+    for(;i<BLOCK_MAP_SEC_NUM*SECTOR_SIZE ;i++){
+        for(; j<8; j++, mask<<=1){
+            if((bmap[i] & mask) == 0){
+                bmap[i] |= mask;
+                int blk_index = i*8+j;
+                uint32_t data_blk_addr = blk_index*BLOCK_SIZE/SECTOR_SIZE + FS_START_SECTOR + DATA_BLOCK_OFFSET;
+                bzero(buffer_s, BLOCK_SIZE);
+                bios_sd_write(kva2pa(buffer_s), BLOCK_SIZE/SECTOR_SIZE, data_blk_addr);
+                addr_array[count] = data_blk_addr;
+                count++;
+
+                if(count==num){
+                    int sec_num = CEIL(blk_index, SECTOR_SIZE);
+                    sec_num = sec_num == 0 ? 1 : sec_num; 
+                    bios_sd_write(kva2pa(bmap), sec_num, FS_START_SECTOR + BLOCK_MAP_OFFSET);
+                    return 1;
+                }
+            }  
+        }
+        if(j==8){
+                j=0;
+                mask=1;
+        }
+        if(i==BLOCK_MAP_SEC_NUM*SECTOR_SIZE-1 && count<num){
+            // no enough blocks
+            i++;    // to break outer loop
+            j = 0; // reset j
+            mask = 1; // reset mask
+            break;
+        }
+    }
+}
+
+inode_t *ino2inode(int ino){
+    int offset = ino / INODE_PER_SEC;
+    bios_sd_read(kva2pa(buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+    return ((inode_t *)buffer_f) + (ino % INODE_PER_SEC);
+}
+
+inode_t set_inode(short type,int mode,int ino){
+    inode_t inode;
+    bzero(&inode, sizeof(inode_t));
+    inode.type = type;
+    inode.mode = mode;
+    inode.ino = ino;
+    inode.nlink = 1;
+    inode.size = 0;
+    return inode;
 }
