@@ -169,7 +169,7 @@ void handle_shell_command(char *input){
         sys_rmdir(args[1]);
     else if(strcmp("ls",args[0])==0){
         int ret;
-        if(strcmp(args[1],"-l")==0){
+        if(strcmp(args[1],"-al")==0){
             ret = sys_ls(args[2],1);
         }else{
             ret = sys_ls(args[1],0);
