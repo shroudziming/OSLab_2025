@@ -258,10 +258,10 @@ int do_ls(char *path, int option)
         if(dentry[i].filename[0]==0)
             continue;
         if(option){ //ls -al
-            printk("ino: %d ", dentry[i].ino);
-            // printk("inode_ptr: %x\t", ino2inode(dentry[i].ino));
+            
+            printk("\nino: %d ", dentry[i].ino);
             inode_t tmp = *ino2inode(dentry[i].ino);
-            printk("%c%c%c nlink:%d size:%d %s\n", 
+            printk("%c%c%c nlink:%d size:%d name :%s\n", 
                     tmp.type == DIR ? 'd' : '-',
                     (tmp.mode & O_RDONLY) ? 'r' : '-',
                     (tmp.mode & O_WRONLY) ? 'w' : '-',
