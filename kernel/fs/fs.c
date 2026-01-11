@@ -10,15 +10,17 @@ static superblock_t superblock;
 static inode_t current_inode;
 static char imap[INODE_MAP_SEC_NUM*SECTOR_SIZE];
 static char bmap[BLOCK_MAP_SEC_NUM*SECTOR_SIZE];
-static char buffer_f[SECTOR_SIZE];
-static char buffer_s[SECTOR_SIZE];
-static char level_buffer[3][SECTOR_SIZE];
+static char buffer_f[BLOCK_SIZE];
+static char buffer_s[BLOCK_SIZE];
+static char level_buffer[3][BLOCK_SIZE];
 
 int if_fs_exist();
 int alloc_inode();
 int alloc_block(uint32_t *block_addr, int num_blocks);
 inode_t set_inode(short type, int mode, int ino);
 inode_t* ino2inode(int ino);
+int parse_path(inode_t current_node,char* path,inode_t* target);
+int get_inode_by_name(inode_t node,char* name,inode_t* target);
 
 int do_mkfs(int force)
 {
@@ -135,14 +137,97 @@ int do_statfs(void)
 int do_cd(char *path)
 {
     // TODO [P6-task1]: Implement do_cd
-    
+    if(!if_fs_exist()){
+        printk("\n\t [cd] filesystem does not exist.\n");
+        return 1;  // do_cd fails
+    }
+    inode_t temp_inode;
+    if(parse_path(current_inode, path, &temp_inode) == 0){
+        printk("\n\t [cd] directory %s does not exist.\n", path);
+        return 1;  // do_cd fails
+    }
+    if(temp_inode.type != DIR){
+        printk("\n\t [cd] %s is not a directory.\n", path);
+        return 1;  // do_cd fails
+    }
+    current_inode = temp_inode;
     return 0;  // do_cd succeeds
 }
 
 int do_mkdir(char *path)
 {
     // TODO [P6-task1]: Implement do_mkdir
+    if(!if_fs_exist()){
+        printk("\n\t [mkdir] filesystem does not exist.\n");
+        return 1;  // do_mkdir fails
+    }
+    //check if dir already exists
+    inode_t temp_inode;
+    inode_t parent_temp_inode;
+    char parent_path[20];
+    parent_path[0] = '.';
+    for(int j = 1;j < 20;j++){
+        parent_path[j] = '\0';
+    }
+    for(int i = strlen(path);i>=0;i--){
+        if(path[i] == '/'){
+            memcpy((uint8_t *)parent_path,(const uint8_t *)path,i);
+            parent_path[i] = '\0';
+            int path_len = strlen(parent_path);
+            for(int j = 0;j<20;j++){
+                if(j < path_len - i){
+                    path[j] = path[j + i + 1];
+                }else{
+                    path[j] = '\0';
+                }
+            }
+            break;
+        }
+    }
+    parse_path(current_inode, parent_path, &parent_temp_inode);
+    if(get_inode_by_name(parent_temp_inode,path,NULL)){
+        printk("\n\t [mkdir] directory %s already exists.\n", path);
+        return 1;  // directory already exists
+    }
 
+    //create dentry
+    int ino = alloc_inode();
+    bzero(buffer_f, SECTOR_SIZE);
+    dentry_t *dentry = (dentry_t *)buffer_f;
+    strcpy(dentry[0].filename, ".");
+    strcpy(dentry[1].filename, "..");
+    dentry[0].ino = ino;
+    dentry[1].ino = parent_temp_inode.ino;
+    //allocate data block
+    uint32_t data_block_addr;
+    alloc_block(&data_block_addr,1);
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, data_block_addr);
+    //setup inode
+    inode_t *new_node = ino2inode(ino);
+    *new_node = set_inode(DIR,O_RDWR,ino);
+    new_node->direct_addr[0] = data_block_addr;
+    new_node->size = 2 * sizeof(dentry_t);
+    int offset = ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+    int start_sector = parent_temp_inode.direct_addr[0] + parent_temp_inode.size / SECTOR_SIZE;
+    bios_sd_read(kva2pa((uintptr_t)buffer_f),1, start_sector); 
+    int i;
+    for(i = 0;i < DENTRY_PER_SEC;i++){
+        if(dentry[i].filename[0] == 0){
+            break;
+        }
+    }
+    dentry[i].ino = ino;
+    strcpy(dentry[i].filename, path);
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, start_sector);
+
+    //update parent inode size
+    inode_t *parent_inode = ino2inode(parent_temp_inode.ino);
+    parent_inode->size += sizeof(dentry_t);
+    offset = parent_temp_inode.ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+
+    printk("\n\t [mkdir] directory %s created.\n", path);
     return 0;  // do_mkdir succeeds
 }
 
@@ -157,7 +242,37 @@ int do_ls(char *path, int option)
 {
     // TODO [P6-task1]: Implement do_ls
     // Note: argument 'option' serves for 'ls -l' in A-core
+    if(!if_fs_exist()){
+        printk("[ls] filesystem has not been set up!\n");
+        return 1;
+    }
+    inode_t node;
+    if(path[0]==0)
+        node = current_inode;
+    else if(parse_path(current_inode, path, &node)==0)
+        return 1;   // do_ls fails, path not exist
+    bios_sd_read(kva2pa((uintptr_t)buffer_s), BLOCK_SIZE/SECTOR_SIZE, node.direct_addr[0]);
+    dentry_t* dentry = (dentry_t*)buffer_s;
 
+    for(int i=2; i<DENTRY_PER_SEC; i++){
+        if(dentry[i].filename[0]==0)
+            continue;
+        if(option){ //ls -al
+            printk("ino: %d ", dentry[i].ino);
+            // printk("inode_ptr: %x\t", ino2inode(dentry[i].ino));
+            inode_t tmp = *ino2inode(dentry[i].ino);
+            printk("%c%c%c nlink:%d size:%d %s\n", 
+                    tmp.type == DIR ? 'd' : '-',
+                    (tmp.mode & O_RDONLY) ? 'r' : '-',
+                    (tmp.mode & O_WRONLY) ? 'w' : '-',
+                    tmp.nlink, tmp.size,dentry[i].filename
+                    );
+        }
+        else
+            printk("\t%s", dentry[i].filename);
+    }
+    if(option==0)
+        printk("\n");
     return 0;  // do_ls succeeds
 }
 
@@ -309,4 +424,49 @@ inode_t set_inode(short type,int mode,int ino){
     inode.nlink = 1;
     inode.size = 0;
     return inode;
+}
+
+//current_node as start point
+int parse_path(inode_t current_node,char* path,inode_t* target){
+    if(path == NULL || path[0] == 0){
+        if(target != NULL){
+            *target = current_node;
+        }
+        return 1;
+    }
+    int len;
+    for(len = 0; len < strlen(path); len++){
+        if(path[len] == '/'){
+            break;
+        }
+    }
+    char name[len + 1];
+    memcpy((uint8_t *)name,(const uint8_t *) path, len);
+    name[len] = '\0';
+    inode_t temp_inode;
+    if(get_inode_by_name(current_inode,name,&temp_inode) == 0){
+        //not found
+        return 0;
+    }
+    return parse_path(temp_inode,path+len+1,target);
+}
+
+//search inode by name in "node" directory
+int get_inode_by_name(inode_t node,char* name,inode_t* target){
+    if(node.type != DIR){
+        return 0;
+    }
+    bios_sd_read(kva2pa((uintptr_t)buffer_f),BLOCK_SIZE / SECTOR_SIZE, node.direct_addr[0]);
+    dentry_t* dentry = (dentry_t*)buffer_f;
+    for(int i = 0; i < DENTRY_PER_BLOCK; i++){
+        if(strcmp(dentry[i].filename,name) == 0){
+            if(target != NULL){
+                *target = *ino2inode(dentry[i].ino);
+            }
+            return 1;
+        }else if(dentry[i].filename[0]==0){
+            continue;
+        }
+    }
+    return 0;
 }
