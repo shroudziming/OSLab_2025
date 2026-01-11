@@ -47,7 +47,7 @@ typedef struct superblock {
     // TODO [P6-task1]: Implement the data structure of superblock
     uint32_t magic;              // magic number
     uint32_t fs_start_sec;       // starting sector of the file system
-    uint32_t fs_size_blocks;     // size of the file system in blocks
+    uint32_t fs_size;     // size of the file system in sectors
     uint32_t block_map_offset;
     uint32_t inode_map_offset;
     uint32_t inode_offset;
