@@ -84,7 +84,7 @@ int main(void)
         }else if(temp == '\n' || temp == '\r'){
             if(input_buffer_index == 0){
                 sys_putchar('\n');
-                // printf("> root@UCAS_OS: ");
+                printf(cmd_line);
                 continue;
             }
             input_buffer[input_buffer_index] = '\0';
@@ -174,6 +174,9 @@ void handle_shell_command(char *input){
         }else{
             ret = sys_ls(args[1],0);
         }
+        if(ret){
+            printf("\nInfo: ls failed\n");
+        }
     }else if(strcmp("statfs",args[0])==0)
         sys_statfs();
     else if(strcmp("cd",args[0])==0)
@@ -236,8 +239,10 @@ void shell_clear(){
 }
 
 void shell_cd(){
-    if(sys_cd(args[1]))
+    if(sys_cd(args[1])){
+        printf("\nInfo: change directory to %s failed\n",args[1]);
         return;
+    }
     int i=0;
     while(i < strlen(args[1])){
         char name[16];
@@ -247,7 +252,7 @@ void shell_cd(){
                 i++;
                 break;
             }
-            name[j]=args[1][i];
+            name[j]=args[1][i++];
         }
         name[j]='\0';
         if(strcmp(name,".")==0)
@@ -264,6 +269,7 @@ void shell_cd(){
             strcat(current_dir,name);
         }
     }
+    printf("\nInfo: change directory to %s\n",current_dir);
     set_cmdline();
 }
 
