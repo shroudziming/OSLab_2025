@@ -167,7 +167,7 @@ void handle_shell_command(char *input){
     }
     else if(strcmp("rmdir",args[0])==0)
         sys_rmdir(args[1]);
-    else if(strcmp("ls",args[0])){
+    else if(strcmp("ls",args[0])==0){
         int ret;
         if(strcmp(args[1],"-l")==0){
             ret = sys_ls(args[2],1);
