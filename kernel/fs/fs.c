@@ -34,17 +34,17 @@ int do_mkfs(int force)
         for(int i=0;i<block_num;i++){
             bios_sd_write(kva2pa((uintptr_t)buffer_f),BLOCK_SIZE / SECTOR_SIZE, FS_START_SECTOR + i);
         }
-        printk("[mkfs] clean disk done.\n");
+        printk("\n [mkfs] clean disk done.\n");
     }else if(if_fs_exist()){
-        printk("[mkfs] filesystem already exists. use 'mkfs -f' to force format.\n");
+        printk("\n [mkfs] filesystem already exists. use 'mkfs -f' to force format.\n");
         return 1;  // do_mkfs fails
     }
-    printk("[mkfs] start making filesystem...\n");
-    printk("[mkfs] setting superblock...\n");
+    printk("\n\t [mkfs] start making filesystem...\n");
+    printk("\t [mkfs] setting superblock...\n");
     //setup superblock
     superblock.magic = SUPERBLOCK_MAGIC;
     superblock.fs_start_sec = FS_START_SECTOR;
-    superblock.fs_size_blocks = FS_SIZE * SECTOR_SIZE / BLOCK_SIZE;
+    superblock.fs_size = FS_SIZE;
     superblock.block_map_offset = BLOCK_MAP_OFFSET;
     superblock.inode_map_offset = INODE_MAP_OFFSET;
     superblock.inode_offset = INODE_OFFSET;
@@ -53,7 +53,7 @@ int do_mkfs(int force)
     superblock.data_block_num = DATA_BLOCK_NUM;
     //print out superblock info
     printk("\t magic: 0x%x\n", superblock.magic);
-    printk("\t num sector: %d, start sector: %d\n", superblock.fs_size_blocks, superblock.fs_start_sec);
+    printk("\t num sector: %d, start sector: %d\n", superblock.fs_size, superblock.fs_start_sec);
     printk("\t block map offset: %d(%d)\n", superblock.block_map_offset, BLOCK_MAP_SEC_NUM);
     printk("\t inode map offset: %d(%d)\n", superblock.inode_map_offset, INODE_MAP_SEC_NUM);
     printk("\t inode offset: %d(%d), inode num: %d\n", superblock.inode_offset, INODE_SEC_NUM, superblock.inode_num);
@@ -98,14 +98,44 @@ int do_mkfs(int force)
 int do_statfs(void)
 {
     // TODO [P6-task1]: Implement do_statfs
-
+    if(!if_fs_exist()){
+        printk("\n\t [statfs] filesystem does not exist.\n");
+        return 1;  // do_statfs fails
+    }
+    int used_inode = 0;
+    int used_block = 0;
+    int i,j,mask;
+    for(i=0;i<INODE_MAP_SEC_NUM*SECTOR_SIZE;i++){
+        mask=1;
+        for(j=0;j<8;j++,mask<<=1){
+            if(imap[i] & mask){
+                used_inode++;
+            }
+        }
+    }
+    for(i=0;i<BLOCK_MAP_SEC_NUM*SECTOR_SIZE;i++){
+        mask=1;
+        for(j=0;j<8;j++,mask<<=1){
+            if(bmap[i] & mask){
+                used_block++;
+            }
+        }
+    }
+    printk("\n\t [statfs] filesystem state:\n");
+    printk("\t magic: 0x%x\n", superblock.magic);
+    printk("\t total sectors: %d, start at sector: %d\n", superblock.fs_size, superblock.fs_start_sec);
+    printk("\t inode map offset: %d, occupieed sectors: %d\n", superblock.inode_map_offset, INODE_MAP_SEC_NUM);
+    printk("\t block map offset: %d, occupied sectors: %d\n", superblock.block_map_offset, BLOCK_MAP_SEC_NUM);
+    printk("\t inode offset: %d, occupied sectors: %d\n", superblock.inode_offset, INODE_SEC_NUM);
+    printk("\t data block offset: %d, occupied sectors: %d\n", superblock.data_block_offset, DATA_BLOCK_SEC_NUM);
+    printk("\t inode entry size: %dB, dir entry size: %dB\n", sizeof(inode_t), sizeof(dentry_t));
     return 0;  // do_statfs succeeds
 }
 
 int do_cd(char *path)
 {
     // TODO [P6-task1]: Implement do_cd
-
+    
     return 0;  // do_cd succeeds
 }
 
