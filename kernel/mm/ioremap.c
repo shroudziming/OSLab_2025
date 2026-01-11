@@ -24,6 +24,28 @@ void iounmap(void *io_addr)
 {
     // TODO: [p5-task1] a very naive iounmap() is OK
     // maybe no one would call this function?
+    PTE *pte;
+    PTE *pgd = (PTE *)current_running[cpu_id]->pgdir;
+    uintptr_t va = (uintptr_t)io_addr;
+    va &= VA_MASK;
+    uint64_t vpn2 =
+        va >> (NORMAL_PAGE_SHIFT + PPN_BITS + PPN_BITS);
+    uint64_t vpn1 = (vpn2 << PPN_BITS) ^
+                    (va >> (NORMAL_PAGE_SHIFT + PPN_BITS));
+    uint64_t vpn0 = (vpn2 << (PPN_BITS + PPN_BITS)) ^
+                    (vpn1 << PPN_BITS) ^
+                    (va >> NORMAL_PAGE_SHIFT);
+    if(pgd[vpn2]==0){
+        pte = NULL;
+    }
+    PTE *pmd = (uintptr_t *)pa2kva((get_pa(pgd[vpn2])));
+    if(pmd[vpn1]==0){
+        pte = NULL;
+    }
+    pte = (PTE *)pa2kva((get_pa(pmd[vpn1]))) + vpn0;
+    if(pte!=NULL && (*pte & _PAGE_PRESENT)){
+        *pte = 0;
+    }
 }
 
 //map va & pa into kernel page table(return 1 if success, 0 if fail)
