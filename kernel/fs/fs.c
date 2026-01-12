@@ -23,6 +23,8 @@ int parse_path(inode_t current_node,char* path,inode_t* target);
 int get_inode_by_name(inode_t node,char* name,inode_t* target);
 uint32_t get_datablock_addr(inode_t node,int size);
 void set_level(uint32_t block_addr,int level);
+void recycle_indirect_block(uint32_t data_block_addr, int level);
+void recurse_indirect_block_helper(uint32_t data_block_addr, int level,char *buff);
 
 int do_mkfs(int force)
 {
@@ -631,7 +633,78 @@ int do_ln(char *src_path, char *dst_path)
 int do_rm(char *path)
 {
     // TODO [P6-task2]: Implement do_rm
+    if(!if_fs_exist()){
+        printk("\n\t [rm] filesystem does not exist.\n");
+        return 1;  // do_rm fails
+    }
+    inode_t file_inode;
+    //check if file exists
+    if(get_inode_by_name(current_inode,path,&file_inode) == 0){
+        printk("\n\t [rm] file %s does not exist.\n", path);
+        return 1;  // do_rm fails, file not exist
+    }
+    if(file_inode.type != FILE){
+        printk("\n\t [rm] cannot rm a directory!\n");
+        return 1;  // do_rm fails, not a file
+    }
 
+    //check if we should really delete the file
+    file_inode.nlink--;
+    if(file_inode.nlink == 0){
+        //imap
+        imap[file_inode.ino / 8] &= ~(1 << (file_inode.ino % 8));
+        bios_sd_write(kva2pa((uintptr_t)imap),INODE_MAP_SEC_NUM, FS_START_SECTOR + INODE_MAP_OFFSET);
+        //inode content
+        inode_t *file_inode_ptr = ino2inode(file_inode.ino);
+        bzero(file_inode_ptr, sizeof(inode_t));
+        int offset = file_inode.ino / INODE_PER_SEC;
+        bios_sd_write(kva2pa((uintptr_t)buffer_f),1,FS_START_SECTOR + INODE_OFFSET + offset);
+        //data blocks
+        for(int i = 0; i < DIRECT_ADDR_NUM; i++){
+            if(file_inode.direct_addr[i] != 0){
+                bzero(buffer_f,BLOCK_SIZE);
+                bios_sd_write(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, file_inode.direct_addr[i]);
+                //bmap
+                int block_index = (file_inode.direct_addr[i] - FS_START_SECTOR - DATA_BLOCK_OFFSET) * SECTOR_SIZE / BLOCK_SIZE;
+                bmap[block_index / 8] &= ~(1 << (block_index % 8));
+                bios_sd_write(kva2pa((uintptr_t)bmap), BLOCK_MAP_SEC_NUM, FS_START_SECTOR + BLOCK_MAP_OFFSET);
+            }
+        }
+        //first level indirect blocks
+        for(int i = 0;i < 3;i++){
+            if(file_inode.indirect_addr_1[i]!=0){
+                recycle_indirect_block(file_inode.indirect_addr_1[i],1);
+            }
+        }
+        for(int i = 0;i < 2;i++){
+            if(file_inode.indirect_addr_2[i]!=0){
+                recycle_indirect_block(file_inode.indirect_addr_2[i],2);
+            }
+        }
+    }else{
+        //nlink > 0
+        int offset = file_inode.ino / INODE_PER_SEC;
+        inode_t *file_inode_ptr = ino2inode(file_inode.ino);
+        file_inode_ptr->nlink = file_inode.nlink;
+        bios_sd_write(kva2pa((uintptr_t)buffer_f),1,FS_START_SECTOR + INODE_OFFSET + offset);
+    }
+    //delete dentry from current directory
+    bios_sd_read(kva2pa((uintptr_t)buffer_f),BLOCK_SIZE / SECTOR_SIZE, current_inode.direct_addr[0]);
+    dentry_t* dentry = (dentry_t*)buffer_f;
+    int i;
+    for(i = 0; i < DENTRY_PER_BLOCK; i++){
+        if(file_inode.ino == dentry[i].ino){
+            break;
+        }
+    }
+    bzero(&dentry[i],sizeof(dentry_t));
+    bios_sd_write(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, current_inode.direct_addr[0]);
+    //update current inode size
+    inode_t *curr_inode = ino2inode(current_inode.ino);
+    curr_inode->size -= sizeof(dentry_t);
+    int offset = current_inode.ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);  //in ino2inode we read curr_inode to
+    printk("\n\t [rm] file %s removed.\n", path);
     return 0;  // do_rm succeeds 
 }
 
@@ -847,4 +920,25 @@ void set_level(uint32_t block_addr,int level){
         }
     }
     bios_sd_write(kva2pa((uintptr_t)level_buffer[level]), BLOCK_SIZE / SECTOR_SIZE, block_addr);
+}
+
+void recycle_indirect_block(uint32_t data_block_addr, int level){
+    bzero(buffer_f, BLOCK_SIZE);
+    recurse_indirect_block_helper(data_block_addr,level,buffer_f);
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),BLOCK_MAP_SEC_NUM, FS_START_SECTOR + BLOCK_MAP_OFFSET);
+}
+
+void recurse_indirect_block_helper(uint32_t data_block_addr, int level,char *buff){
+    if(level){
+        uint32_t * addr_array = level_buffer[level - 1];
+        bios_sd_read(kva2pa((uintptr_t)level_buffer[level - 1]), BLOCK_SIZE / SECTOR_SIZE, data_block_addr);
+        for(int i = 0;i < ADDR_PER_BLOCK;i++){
+            recurse_indirect_block_helper(addr_array[i], level - 1, buff);
+        }
+    }
+    bios_sd_read(kva2pa((uintptr_t)buff),BLOCK_SIZE / SECTOR_SIZE, data_block_addr);
+
+    //free bmao
+    int blk_index = (data_block_addr - FS_START_SECTOR - DATA_BLOCK_OFFSET) * SECTOR_SIZE / BLOCK_SIZE;
+    bmap[blk_index / 8] &= ~(1 << (blk_index % 8));
 }
