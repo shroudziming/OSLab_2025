@@ -93,7 +93,7 @@ int do_mkfs(int force)
     bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
     //initialize file descriptor array
     bzero(fdesc_array, sizeof(fdesc_t) * NUM_FDESCS);
-    printk("[mkfs] make filesystem done.\n");
+    printk("\t [mkfs] make filesystem done.\n");
     return 0;  // do_mkfs succeeds
 }
 
@@ -234,7 +234,69 @@ int do_mkdir(char *path)
 int do_rmdir(char *path)
 {
     // TODO [P6-task1]: Implement do_rmdir
+    if(!if_fs_exist()){
+        printk("\n\t [rmdir] filesystem does not exist.\n");
+        return 1;  // do_rmdir fails
+    }
+    inode_t dir;
+    if(get_inode_by_name(current_inode,path,&dir) == 0){
+        printk("\n\t [rmdir] directory %s does not exist.\n", path);
+        return 1;  // do_rmdir fails, dir not exist
+    }
+    if(dir.type != DIR){
+        printk("\n\t [rmdir] %s is not a directory.\n", path);
+        return 1;  // do_rmdir fails, not a dir
+    }
+    //check if dir is empty
+    if(dir.size > 2 * sizeof(dentry_t)){
+        printk("\n\t [rmdir] directory %s is not empty.\n", path);
+        return 1;  // do_rmdir fails, dir not empty
+    }
 
+    //remove dentry from parent dir
+    dir.nlink--;
+    if(dir.nlink == 0){
+        //inode table
+        int offset = dir.ino / INODE_PER_SEC;
+        inode_t *dir_inode = ino2inode(dir.ino);
+        bzero(dir_inode, sizeof(inode_t));
+        bios_sd_write(kva2pa((uintptr_t)buffer_f),1,FS_START_SECTOR + INODE_OFFSET + offset);
+        //imap
+        imap[dir.ino / 8] &= ~(1 << (dir.ino % 8));
+        bios_sd_write(kva2pa((uintptr_t)imap),INODE_MAP_SEC_NUM, FS_START_SECTOR + INODE_MAP_OFFSET);
+        //data block
+        bzero(buffer_f,BLOCK_SIZE);
+        uint32_t data_block_addr = dir.direct_addr[0];
+        bios_sd_write(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, data_block_addr);
+        //bmap
+        int blk_index = (data_block_addr - FS_START_SECTOR - DATA_BLOCK_OFFSET) * SECTOR_SIZE / BLOCK_SIZE;
+        bmap[blk_index / 8] &= ~(1 << (blk_index % 8));
+        bios_sd_write(kva2pa((uintptr_t)bmap), BLOCK_MAP_SEC_NUM, FS_START_SECTOR + BLOCK_MAP_OFFSET);
+
+        //delete dentry from parent directory(current_inode)
+        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, current_inode.direct_addr[0]);
+        dentry_t* dentry = (dentry_t*)buffer_f;
+        int i;
+        for(i = 0; i < DENTRY_PER_BLOCK; i++){
+            if(dir.ino == dentry[i].ino){
+                break;
+            }
+        }
+        bzero(&dentry[i],sizeof(dentry_t));
+        bios_sd_write(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, current_inode.direct_addr[0]);
+        //update current_inode size
+        inode_t *curr_inode = ino2inode(current_inode.ino);
+        curr_inode->size -= sizeof(dentry_t);
+        offset = current_inode.ino / INODE_PER_SEC;
+        bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);  //in ino2inode we read curr_inode to buffer_f
+    }else{
+        //nlink > 0, just update inode
+        int offset = dir.ino / INODE_PER_SEC;
+        inode_t *dir_inode = ino2inode(dir.ino);
+        dir_inode->nlink = dir.nlink;
+        bios_sd_write(kva2pa((uintptr_t)buffer_f),1,FS_START_SECTOR + INODE_OFFSET + offset);
+    }
+    printk("\n\t [rmdir] directory %s removed.\n", path);
     return 0;  // do_rmdir succeeds
 }
 
