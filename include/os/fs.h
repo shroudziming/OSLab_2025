@@ -40,8 +40,8 @@
 #define DIRECT_SIZE (DIRECT_ADDR_NUM * BLOCK_SIZE)  // direct blocks
 #define INDIRECT_SIZE_1 (3*BLOCK_SIZE/ADDR_PER_BLOCK)  // single indirect
 #define INDIRECT_SIZE_2 (2*BLOCK_SIZE*ADDR_PER_BLOCK*ADDR_PER_BLOCK)  // double indirect
-#define INDIRECT_SIZE_3 (1*BLOCK_SIZE*ADDR_PER_BLOCK*ADDR_PER_BLOCK*ADDR_PER_BLOCK)  // triple indirect
-#define MAX_FILE_SIZE (DIRECT_SIZE + INDIRECT_SIZE_1 + INDIRECT_SIZE_2 + INDIRECT_SIZE_3)
+
+#define MAX_FILE_SIZE (DIRECT_SIZE + INDIRECT_SIZE_1 + INDIRECT_SIZE_2)
 /* data structures of file system */
 typedef struct superblock {
     // TODO [P6-task1]: Implement the data structure of superblock
@@ -72,7 +72,6 @@ typedef struct inode {
     uint32_t direct_addr[DIRECT_ADDR_NUM];  // direct addresses
     uint32_t indirect_addr_1[3];    // single indirect address
     uint32_t indirect_addr_2[2];    // double indirect address
-    uint32_t indirect_addr_3;       // triple indirect address
 } inode_t;
 
 typedef struct fdesc {
@@ -80,6 +79,7 @@ typedef struct fdesc {
     uint8_t valid;
     uint8_t mode;    // open mode
     int ino;
+    short ref;
     uint32_t write_ptr;  // write pointer
     uint32_t read_ptr;   // read pointer
 } fdesc_t;
