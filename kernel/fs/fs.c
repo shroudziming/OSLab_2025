@@ -930,7 +930,7 @@ void recycle_indirect_block(uint32_t data_block_addr, int level){
 
 void recurse_indirect_block_helper(uint32_t data_block_addr, int level,char *buff){
     if(level){
-        uint32_t * addr_array = level_buffer[level - 1];
+        uint32_t * addr_array = (uint32_t *)level_buffer[level - 1];
         bios_sd_read(kva2pa((uintptr_t)level_buffer[level - 1]), BLOCK_SIZE / SECTOR_SIZE, data_block_addr);
         for(int i = 0;i < ADDR_PER_BLOCK;i++){
             recurse_indirect_block_helper(addr_array[i], level - 1, buff);
