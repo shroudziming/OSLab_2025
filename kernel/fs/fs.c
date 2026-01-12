@@ -581,7 +581,50 @@ int do_close(int fd)
 int do_ln(char *src_path, char *dst_path)
 {
     // TODO [P6-task2]: Implement do_ln
-
+    if(!if_fs_exist()){
+        printk("\n\t [ln] filesystem does not exist.\n");
+        return 1;  // do_ln fails
+    }
+    inode_t src_inode;
+    //check if src file exists
+    if(parse_path(current_inode,src_path,&src_inode)==0){
+        printk("\n\t [ln] source file %s does not exist.\n", src_path);
+        return 1;  // do_ln fails, src file not exist
+    }
+    if(src_inode.type != FILE){
+        printk("\n\t [ln] %s is not a file.\n", src_path);
+        return 1;  // do_ln fails, src not a file
+    }
+    //check if dst_file already exists
+    inode_t tmp;
+    if(get_inode_by_name(current_inode,dst_path,&tmp)){
+        printk("\n\t [ln] destination file %s already exists.\n", dst_path);
+        return 1;  // do_ln fails, dst file already exists
+    }
+    //create hard link
+    inode_t *src_inode_ptr = ino2inode(src_inode.ino);
+    src_inode_ptr->nlink++;
+    int offset = src_inode.ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+    //add dentry to current directory
+    int start_sector = current_inode.direct_addr[0] + current_inode.size / SECTOR_SIZE;
+    bios_sd_read(kva2pa((uintptr_t)buffer_f),1, start_sector);
+    int i;
+    dentry_t *dentry = (dentry_t*)buffer_f;
+    for(i = 0;i < DENTRY_PER_SEC;i++){
+        if(dentry[i].filename[0] == 0){
+            break;
+        }
+    }
+    dentry[i].ino = src_inode.ino;
+    strcpy(dentry[i].filename, dst_path);
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, start_sector);
+    //update current inode size
+    inode_t *curr_inode = ino2inode(current_inode.ino);
+    curr_inode->size += sizeof(dentry_t);
+    offset = current_inode.ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+    printk("\n\t [ln] hard link from %s to %s created.\n", src_path, dst_path);
     return 0;  // do_ln succeeds 
 }
 
