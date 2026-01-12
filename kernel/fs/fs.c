@@ -12,7 +12,7 @@ static char imap[INODE_MAP_SEC_NUM*SECTOR_SIZE];
 static char bmap[BLOCK_MAP_SEC_NUM*SECTOR_SIZE];
 static char buffer_f[BLOCK_SIZE];
 static char buffer_s[BLOCK_SIZE];
-static char level_buffer[3][BLOCK_SIZE];
+static char level_buffer[2][BLOCK_SIZE];
 
 int if_fs_exist();
 int alloc_inode();
@@ -21,6 +21,8 @@ inode_t set_inode(short type, int mode, int ino);
 inode_t* ino2inode(int ino);
 int parse_path(inode_t current_node,char* path,inode_t* target);
 int get_inode_by_name(inode_t node,char* name,inode_t* target);
+uint32_t get_datablock_addr(inode_t node,int size);
+void set_level(uint32_t block_addr,int level);
 
 int do_mkfs(int force)
 {
@@ -354,7 +356,7 @@ int do_touch(char *path)
     
     //alloc data block
     int data_block_addr;
-    alloc_block(&data_block_addr,1);
+    alloc_block((uint32_t *)&data_block_addr,1);
     //alloc inode
     int ino = alloc_inode();
     int offset = ino / INODE_PER_SEC;
@@ -381,41 +383,198 @@ int do_touch(char *path)
     curr_inode->size += sizeof(dentry_t);
     offset = current_inode.ino / INODE_PER_SEC;
     bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+    printk("\n\t [touch] file %s created.\n", path);
     return 0;  // do_touch succeeds
 }
 
 int do_cat(char *path)
 {
     // TODO [P6-task2]: Implement do_cat
-
+    if(!if_fs_exist()){
+        printk("\n\t [cat] filesystem does not exist.\n");
+        return 1;  // do_cat fails
+    }
+    inode_t file_inode;
+    //check if file exists
+    if(get_inode_by_name(current_inode,path,&file_inode) == 0){
+        printk("\n\t [cat] file %s does not exist.\n", path);
+        return 1;  // do_cat fails, file not exist
+    }
+    if(file_inode.type != FILE){
+        printk("\n\t [cat] %s is not a file.\n", path);
+        return 1;  // do_cat fails, not a file
+    }
+    //print file content
+    printk("\n");
+    for(int read_ptr = 0; read_ptr < file_inode.size; read_ptr += BLOCK_SIZE){
+        uint32_t read_addr = get_datablock_addr(file_inode,read_ptr);
+        bios_sd_read((kva2pa((uintptr_t)buffer_f)), BLOCK_SIZE / SECTOR_SIZE, read_addr);
+        printk(buffer_f);
+    }
     return 0;  // do_cat succeeds
 }
 
 int do_open(char *path, int mode)
 {
     // TODO [P6-task2]: Implement do_open
-
-    return 0;  // return the id of file descriptor
+    if(!if_fs_exist()){
+        printk("\n\t [open] filesystem does not exist.\n");
+        return 1;  // do_open fails
+    }
+    //check if file exists
+    inode_t file_inode;
+    if(get_inode_by_name(current_inode,path,&file_inode) == 0){
+        printk("\n\t [open] file %s does not exist.\n", path);
+        return 1;  // do_open fails, file not exist
+    }
+    if(file_inode.type != FILE){
+        printk("\n\t [open] %s is not a file.\n", path);
+        return 1;  // do_open fails, not a file
+    }
+    //mode check
+    if(((file_inode.mode & O_RDONLY) > (mode & O_RDONLY) || (file_inode.mode & O_WRONLY) > (mode & O_WRONLY))){
+        printk("\n\t [open] file %s mode error.\n", path);
+        return 1;  // do_open fails, mode error
+    }
+    //find a free fdesc
+    int fd;
+    for(fd = 0; fd < NUM_FDESCS; fd++){
+        if(fdesc_array[fd].valid == 0){
+            break;
+        }
+    }
+    fdesc_array[fd].valid = 1;
+    fdesc_array[fd].ino = file_inode.ino;
+    fdesc_array[fd].mode = mode;
+    fdesc_array[fd].ref++;
+    fdesc_array[fd].read_ptr = 0;
+    fdesc_array[fd].write_ptr = 0;
+    return fd;  // return the id of file descriptor
 }
 
 int do_read(int fd, char *buff, int length)
 {
     // TODO [P6-task2]: Implement do_read
+    if(!if_fs_exist()){
+        printk("\n\t [read] filesystem does not exist.\n");
+        return 1;  // do_read fails
+    }
+    if(fd < 0 || fd >= NUM_FDESCS || fdesc_array[fd].valid == 0){
+        printk("\n\t [read] file descriptor %d is invalid.\n", fd);
+        return 1;  // do_read fails, invalid fd
+    }
+    //check mode
+    if((fdesc_array[fd].mode & O_RDONLY) == 0){
+        printk("\n\t [read] file descriptor %d not opened in read mode.\n", fd);
+        return 1;  // do_read fails, not opened in read mode
+    }
+    inode_t file_inode = *ino2inode(fdesc_array[fd].ino);
+    int len = length;
+    if(length + fdesc_array[fd].read_ptr > MAX_FILE_SIZE){
+        len = MAX_FILE_SIZE - fdesc_array[fd].read_ptr;
+    }
 
+    int start = fdesc_array[fd].read_ptr;
+    int end   = start + len;      // 本次要读到的位置（不含end）
+    int cur   = start;            // 当前正在读取的文件内偏移
+    char *dst = buff;             // 输出缓冲区写指针
+
+    while (cur < end) {
+        int offset_in_block = cur % BLOCK_SIZE;              // cur在块内的偏移
+        int bytes_left_in_block = BLOCK_SIZE - offset_in_block; // 当前块里还剩多少字节可用
+        int bytes_left_total = end - cur;                    // 总共还剩多少字节没读
+
+        int to_copy = (bytes_left_total < bytes_left_in_block)
+                        ? bytes_left_total
+                        : bytes_left_in_block;
+
+        uint32_t block_addr = get_datablock_addr(file_inode, cur);
+        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, block_addr);
+
+        memcpy((uint8_t *)dst, (const uint8_t *)buffer_f + offset_in_block, to_copy);
+
+        cur += to_copy;
+        dst += to_copy;
+    }
+
+    fdesc_array[fd].read_ptr += len;
+    inode_t *inode = ino2inode(fdesc_array[fd].ino);    //update buffer_f
+    int offset = file_inode.ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
     return 0;  // return the length of trully read data
 }
 
 int do_write(int fd, char *buff, int length)
 {
     // TODO [P6-task2]: Implement do_write
+    if(!if_fs_exist()){
+        printk("\n\t [write] filesystem does not exist.\n");
+        return 1;  // do_write fails
+    }
+    if(fd < 0 || fd >= NUM_FDESCS || fdesc_array[fd].valid == 0){
+        printk("\n\t [write] file descriptor %d is invalid.\n", fd);
+        return 1;  // do_write fails, invalid fd
+    }
+    //check mode
+    if((fdesc_array[fd].mode & O_WRONLY) == 0){
+        printk("\n\t [write] file descriptor %d not opened in write mode.\n", fd);
+        return 1;  // do_write fails, not opened in write mode
+    }
+    inode_t file_inode = *ino2inode(fdesc_array[fd].ino);
+    int len = length;
+    if(length + fdesc_array[fd].write_ptr > MAX_FILE_SIZE){
+        len = MAX_FILE_SIZE - fdesc_array[fd].write_ptr;
+    }
 
+    int start = fdesc_array[fd].write_ptr;
+    int end   = start + len;   // 本次要写到的位置（不含end）
+    int cur   = start;         // 当前正在写的文件内偏移
+    char *src = buff;          // 输入缓冲区读指针（不直接改buff本身也等价）
+
+    while (cur < end) {
+        int offset_in_block = cur % BLOCK_SIZE;                 // cur在块内偏移
+        int bytes_left_in_block = BLOCK_SIZE - offset_in_block; // 当前块还能放多少字节
+        int bytes_left_total = end - cur;                       // 总共还剩多少字节没写
+
+        int to_copy = (bytes_left_total < bytes_left_in_block)
+                        ? bytes_left_total
+                        : bytes_left_in_block;
+
+        uint32_t write_addr = get_datablock_addr(file_inode, cur);
+
+        //非整块覆盖时，先把旧块读出来再局部修改
+        if (offset_in_block != 0 || to_copy < BLOCK_SIZE) {
+            bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, write_addr);
+        }
+
+        memcpy((uint8_t *)(buffer_f + offset_in_block), (const uint8_t *)src, to_copy);
+        bios_sd_write(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, write_addr);
+        cur += to_copy;
+        src += to_copy;
+    }
+
+    fdesc_array[fd].write_ptr += len;
+    //update inode size
+    inode_t *inode = ino2inode(fdesc_array[fd].ino);
+    if(fdesc_array[fd].write_ptr > inode->size){
+        inode->size = fdesc_array[fd].write_ptr;
+    }
+    int offset = fdesc_array[fd].ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset); 
     return 0;  // return the length of trully written data
 }
 
 int do_close(int fd)
 {
     // TODO [P6-task2]: Implement do_close
-
+    if(fd < 0 || fd >= NUM_FDESCS || fdesc_array[fd].valid == 0){
+        printk("\n\t [close] file descriptor %d is invalid.\n", fd);
+        return 1;  // do_close fails, invalid fd
+    }
+    fdesc_array[fd].ref--;
+    if(fdesc_array[fd].ref == 0){
+        bzero(&fdesc_array[fd], sizeof(fdesc_t));
+    }
     return 0;  // do_close succeeds
 }
 
@@ -570,4 +729,79 @@ int get_inode_by_name(inode_t node,char* name,inode_t* target){
         }
     }
     return 0;
+}
+
+uint32_t get_datablock_addr(inode_t node,int size){
+    //direct addr
+    if(size < DIRECT_SIZE){
+        int index = size / BLOCK_SIZE;
+        if(node.direct_addr[index] == 0){
+            uint32_t data_block_addr;
+            alloc_block(&data_block_addr,1);
+            inode_t* inode = ino2inode(node.ino);
+            inode->direct_addr[index] = data_block_addr;
+            int offset = node.ino / INODE_PER_SEC;
+            bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+            return inode->direct_addr[index];
+        }
+        return node.direct_addr[index];
+    }
+    //single indirect addr
+    else if(size < INDIRECT_SIZE_1 + DIRECT_SIZE){
+        size -= DIRECT_SIZE;
+        int index = size / (BLOCK_SIZE * ADDR_PER_BLOCK);
+        int index2 = (size % (BLOCK_SIZE * ADDR_PER_BLOCK)) / BLOCK_SIZE;
+        uint32_t data_block_addr;
+        if(node.indirect_addr_1[index]==0){
+            alloc_block(&data_block_addr,1);
+            set_level(data_block_addr,0);
+            inode_t* inode = ino2inode(node.ino);
+            inode->indirect_addr_1[index] = data_block_addr;
+            int offset = node.ino / INODE_PER_SEC;
+            bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+        }else{
+            data_block_addr = node.indirect_addr_1[index];
+        }
+        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, data_block_addr);
+        uint32_t* addr_array = (uint32_t*)buffer_f;
+        return addr_array[index2];
+    }
+    //double indirect addr
+    else if(size < INDIRECT_SIZE_2 + INDIRECT_SIZE_1 + DIRECT_SIZE){
+        size -= INDIRECT_SIZE_1 + DIRECT_SIZE;
+        int index = size / (BLOCK_SIZE * ADDR_PER_BLOCK * ADDR_PER_BLOCK);
+        int index2 = (size % (BLOCK_SIZE * ADDR_PER_BLOCK * ADDR_PER_BLOCK)) / (BLOCK_SIZE * ADDR_PER_BLOCK);
+        int index3 = (size % (BLOCK_SIZE * ADDR_PER_BLOCK)) / BLOCK_SIZE;
+        uint32_t data_block_addr;
+        if(node.indirect_addr_2[index]==0){
+            alloc_block(&data_block_addr,1);
+            set_level(data_block_addr,1);
+            inode_t* inode = ino2inode(node.ino);
+            inode->indirect_addr_2[index] = data_block_addr;
+            int offset = node.ino / INODE_PER_SEC;
+            bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+        }else{
+            data_block_addr = node.indirect_addr_2[index];
+        }
+        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, data_block_addr);
+        uint32_t* addr_array = (uint32_t*)buffer_f;
+        data_block_addr = addr_array[index2];
+        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, addr_array[index2]);
+        return addr_array[index3];
+    }
+    else{
+        printk("\n\t [Error] file size too large!\n");
+        return 0;
+    }
+}
+
+void set_level(uint32_t block_addr,int level){
+    uint32_t* addr_array = (uint32_t *)level_buffer[level];
+    alloc_block(addr_array, ADDR_PER_BLOCK);
+    if(level!=0){
+        for(int i = 0;i < ADDR_PER_BLOCK;i++){
+            set_level(addr_array[i], level - 1);
+        }
+    }
+    bios_sd_write(kva2pa((uintptr_t)level_buffer[level]), BLOCK_SIZE / SECTOR_SIZE, block_addr);
 }
