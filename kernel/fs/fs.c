@@ -341,7 +341,46 @@ int do_ls(char *path, int option)
 int do_touch(char *path)
 {
     // TODO [P6-task2]: Implement do_touch
+    if(!if_fs_exist()){
+        printk("\n\t [touch] filesystem does not exist.\n");
+        return 1;  // do_touch fails
+    }
+    //check if file already exists
+    if(get_inode_by_name(current_inode,path,NULL)){
+        printk("\n\t [touch] file %s already exists.\n", path);
+        return 1;  // file already exists
+    }
+    //create a new file
+    
+    //alloc data block
+    int data_block_addr;
+    alloc_block(&data_block_addr,1);
+    //alloc inode
+    int ino = alloc_inode();
+    int offset = ino / INODE_PER_SEC;
+    inode_t * file_inode = ino2inode(ino);
+    *file_inode = set_inode(FILE,O_RDWR,ino);
+    file_inode->direct_addr[0] = data_block_addr;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
 
+    //add dentry to current directory
+    int start_sector = current_inode.direct_addr[0] + current_inode.size / SECTOR_SIZE;
+    bios_sd_read(kva2pa((uintptr_t)buffer_f),1, start_sector);
+    dentry_t* dentry = (dentry_t*)buffer_f;
+    int i;
+    for(i = 0;i < DENTRY_PER_SEC;i++){
+        if(dentry[i].filename[0] == 0){
+            break;
+        }
+    }
+    dentry[i].ino = ino;
+    strcpy(dentry[i].filename, path);
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, start_sector);
+    //update current inode size
+    inode_t *curr_inode = ino2inode(current_inode.ino);
+    curr_inode->size += sizeof(dentry_t);
+    offset = current_inode.ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
     return 0;  // do_touch succeeds
 }
 
