@@ -38,8 +38,8 @@
 #define ADDR_PER_SECTOR (SECTOR_SIZE / sizeof(uint32_t))
 #define DIRECT_ADDR_NUM 13
 #define DIRECT_SIZE (DIRECT_ADDR_NUM * BLOCK_SIZE)  // direct blocks
-#define INDIRECT_SIZE_1 (3*BLOCK_SIZE*ADDR_PER_BLOCK)  // single indirect
-#define INDIRECT_SIZE_2 (2*BLOCK_SIZE*ADDR_PER_BLOCK*ADDR_PER_BLOCK)  // double indirect
+#define INDIRECT_SIZE_1 (3 * BLOCK_SIZE * ADDR_PER_BLOCK)  // single indirect
+#define INDIRECT_SIZE_2 (2 * BLOCK_SIZE * ADDR_PER_BLOCK * ADDR_PER_BLOCK)  // double indirect
 
 #define MAX_FILE_SIZE (DIRECT_SIZE + INDIRECT_SIZE_1 + INDIRECT_SIZE_2)
 /* data structures of file system */
