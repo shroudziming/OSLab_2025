@@ -711,8 +711,30 @@ int do_rm(char *path)
 int do_lseek(int fd, int offset, int whence)
 {
     // TODO [P6-task2]: Implement do_lseek
-
-    return 0;  // the resulting offset location from the beginning of the file
+    if(!if_fs_exist()){
+        printk("\n\t [lseek] filesystem does not exist.\n");
+        return 1;  // do_lseek fails
+    }
+    if(fd < 0 || fd >= NUM_FDESCS || fdesc_array[fd].valid == 0){
+        printk("\n\t [lseek] file descriptor %d is invalid.\n", fd);
+        return 1;  // do_lseek fails, invalid fd
+    }
+    if(whence == SEEK_SET){
+        fdesc_array[fd].read_ptr = offset;
+        fdesc_array[fd].write_ptr = offset;
+        return offset;
+    }else if(whence == SEEK_CUR){
+        fdesc_array[fd].read_ptr += offset;
+        fdesc_array[fd].write_ptr += offset;
+        return fdesc_array[fd].read_ptr;
+    }else if(whence == SEEK_END){
+        inode_t file_inode = *ino2inode(fdesc_array[fd].ino);
+        fdesc_array[fd].read_ptr = file_inode.size + offset;
+        fdesc_array[fd].write_ptr = file_inode.size + offset;
+        return fdesc_array[fd].write_ptr;
+    }
+    printk("\n\t [lseek] whence argument error.\n");
+    return -1;  // the resulting offset location from the beginning of the file
 }
 
 int if_fs_exist(){
