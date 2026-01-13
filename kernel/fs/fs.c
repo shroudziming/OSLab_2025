@@ -503,7 +503,7 @@ int do_read(int fd, char *buff, int length)
     inode_t *inode = ino2inode(fdesc_array[fd].ino);    //update buffer_f
     int offset = file_inode.ino / INODE_PER_SEC;
     bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
-    return 0;  // return the length of trully read data
+    return len;  // return the length of trully read data
 }
 
 int do_write(int fd, char *buff, int length)
@@ -557,13 +557,13 @@ int do_write(int fd, char *buff, int length)
 
     fdesc_array[fd].write_ptr += len;
     //update inode size
-    inode_t *inode = ino2inode(fdesc_array[fd].ino);
+    inode_t *inode = ino2inode(file_inode.ino);
     if(fdesc_array[fd].write_ptr > inode->size){
         inode->size = fdesc_array[fd].write_ptr;
     }
-    int offset = fdesc_array[fd].ino / INODE_PER_SEC;
+    int offset = file_inode.ino / INODE_PER_SEC;
     bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset); 
-    return 0;  // return the length of trully written data
+    return len;  // return the length of trully written data
 }
 
 int do_close(int fd)
@@ -693,9 +693,13 @@ int do_rm(char *path)
     dentry_t* dentry = (dentry_t*)buffer_f;
     int i;
     for(i = 0; i < DENTRY_PER_BLOCK; i++){
-        if(file_inode.ino == dentry[i].ino){
+        if(strcmp(dentry[i].filename, path) == 0){
             break;
         }
+    }
+    if(i == DENTRY_PER_BLOCK){
+        printk("\n\t [rm] internal error: dentry %s not found in current directory.\n", path);
+        return 1;
     }
     bzero(&dentry[i],sizeof(dentry_t));
     bios_sd_write(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, current_inode.direct_addr[0]);
@@ -802,9 +806,10 @@ int alloc_block(uint32_t *addr_array,int num){
             i++;    // to break outer loop
             j = 0; // reset j
             mask = 1; // reset mask
-            break;
         }
     }
+    printk("\n\t [alloc_block] no enough blocks.\n");
+    return 0; // no enough blocks
 }
 
 inode_t* ino2inode(int ino){
@@ -888,43 +893,73 @@ uint32_t get_datablock_addr(inode_t node,int size){
     else if(size < INDIRECT_SIZE_1 + DIRECT_SIZE){
         size -= DIRECT_SIZE;
         int index = size / (BLOCK_SIZE * ADDR_PER_BLOCK);
-        int index2 = (size % (BLOCK_SIZE * ADDR_PER_BLOCK)) / BLOCK_SIZE;
-        uint32_t data_block_addr;
-        if(node.indirect_addr_1[index]==0){
-            alloc_block(&data_block_addr,1);
-            set_level(data_block_addr,0);
-            inode_t* inode = ino2inode(node.ino);
-            inode->indirect_addr_1[index] = data_block_addr;
+        int index2 = (size - index * BLOCK_SIZE * ADDR_PER_BLOCK) / BLOCK_SIZE;
+        uint32_t indirect_block_addr;
+
+        // Ensure the single-indirect pointer block exists (on-demand)
+        if(node.indirect_addr_1[index] == 0){
+            alloc_block(&indirect_block_addr, 1);
+            inode_t *inode = ino2inode(node.ino);
+            inode->indirect_addr_1[index] = indirect_block_addr;
             int offset = node.ino / INODE_PER_SEC;
-            bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+            bios_sd_write(kva2pa((uintptr_t)buffer_f), 1, FS_START_SECTOR + INODE_OFFSET + offset);
         }else{
-            data_block_addr = node.indirect_addr_1[index];
+            indirect_block_addr = node.indirect_addr_1[index];
         }
-        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, data_block_addr);
-        uint32_t* addr_array = (uint32_t*)buffer_f;
+
+        // Ensure the target data block entry exists (on-demand)
+        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, indirect_block_addr);
+        uint32_t *addr_array = (uint32_t *)buffer_f;
+        if(addr_array[index2] == 0){
+            uint32_t data_block_addr;
+            alloc_block(&data_block_addr, 1);
+            addr_array[index2] = data_block_addr;
+            bios_sd_write(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, indirect_block_addr);
+        }
         return addr_array[index2];
     }
     //double indirect addr
     else if(size < INDIRECT_SIZE_2 + INDIRECT_SIZE_1 + DIRECT_SIZE){
-        size -= INDIRECT_SIZE_1 + DIRECT_SIZE;
+        size -= (INDIRECT_SIZE_1 + DIRECT_SIZE);
         int index = size / (BLOCK_SIZE * ADDR_PER_BLOCK * ADDR_PER_BLOCK);
-        int index2 = (size % (BLOCK_SIZE * ADDR_PER_BLOCK * ADDR_PER_BLOCK)) / (BLOCK_SIZE * ADDR_PER_BLOCK);
-        int index3 = (size % (BLOCK_SIZE * ADDR_PER_BLOCK)) / BLOCK_SIZE;
-        uint32_t data_block_addr;
-        if(node.indirect_addr_2[index]==0){
-            alloc_block(&data_block_addr,1);
-            set_level(data_block_addr,1);
-            inode_t* inode = ino2inode(node.ino);
-            inode->indirect_addr_2[index] = data_block_addr;
+        int rem = size - index * BLOCK_SIZE * ADDR_PER_BLOCK * ADDR_PER_BLOCK;
+        int index2 = rem / (BLOCK_SIZE * ADDR_PER_BLOCK);
+        int rem2 = rem - index2 * BLOCK_SIZE * ADDR_PER_BLOCK;
+        int index3 = rem2 / BLOCK_SIZE;
+
+        uint32_t top_indirect_block_addr;
+
+        // Ensure the top-level double-indirect pointer block exists (on-demand)
+        if(node.indirect_addr_2[index] == 0){
+            alloc_block(&top_indirect_block_addr, 1);
+            inode_t *inode = ino2inode(node.ino);
+            inode->indirect_addr_2[index] = top_indirect_block_addr;
             int offset = node.ino / INODE_PER_SEC;
-            bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+            bios_sd_write(kva2pa((uintptr_t)buffer_f), 1, FS_START_SECTOR + INODE_OFFSET + offset);
         }else{
-            data_block_addr = node.indirect_addr_2[index];
+            top_indirect_block_addr = node.indirect_addr_2[index];
         }
-        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, data_block_addr);
-        uint32_t* addr_array = (uint32_t*)buffer_f;
-        data_block_addr = addr_array[index2];
-        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, addr_array[index2]);
+
+        // Ensure the second-level pointer block exists (on-demand)
+        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, top_indirect_block_addr);
+        uint32_t *addr_array = (uint32_t *)buffer_f;
+        if(addr_array[index2] == 0){
+            uint32_t second_level_block_addr;
+            alloc_block(&second_level_block_addr, 1);
+            addr_array[index2] = second_level_block_addr;
+            bios_sd_write(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, top_indirect_block_addr);
+        }
+
+        // Ensure the target data block exists (on-demand)
+        uint32_t second_level_block_addr = addr_array[index2];
+        bios_sd_read(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, second_level_block_addr);
+        addr_array = (uint32_t *)buffer_f;
+        if(addr_array[index3] == 0){
+            uint32_t data_block_addr;
+            alloc_block(&data_block_addr, 1);
+            addr_array[index3] = data_block_addr;
+            bios_sd_write(kva2pa((uintptr_t)buffer_f), BLOCK_SIZE / SECTOR_SIZE, second_level_block_addr);
+        }
         return addr_array[index3];
     }
     else{
@@ -936,7 +971,7 @@ uint32_t get_datablock_addr(inode_t node,int size){
 void set_level(uint32_t block_addr,int level){
     uint32_t* addr_array = (uint32_t *)level_buffer[level];
     alloc_block(addr_array, ADDR_PER_BLOCK);
-    if(level!=0){
+    if(level){
         for(int i = 0;i < ADDR_PER_BLOCK;i++){
             set_level(addr_array[i], level - 1);
         }
