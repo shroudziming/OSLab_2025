@@ -14,6 +14,8 @@ static char buffer_f[BLOCK_SIZE];
 static char buffer_s[BLOCK_SIZE];
 static char level_buffer[2][BLOCK_SIZE];
 
+
+
 int if_fs_exist();
 int alloc_inode();
 int alloc_block(uint32_t *block_addr, int num_blocks);
@@ -25,6 +27,7 @@ uint32_t get_datablock_addr(inode_t node,int size);
 void set_level(uint32_t block_addr,int level);
 void recycle_indirect_block(uint32_t data_block_addr, int level);
 void recurse_indirect_block_helper(uint32_t data_block_addr, int level,char *buff);
+int split_parent_child(const char *path, char *parent_out, char *name_out);
 
 int do_mkfs(int force)
 {
@@ -134,6 +137,8 @@ int do_statfs(void)
     printk("\t block map offset: %d, occupied sectors: %d\n", superblock.block_map_offset, BLOCK_MAP_SEC_NUM);
     printk("\t inode offset: %d, occupied sectors: %d\n", superblock.inode_offset, INODE_SEC_NUM);
     printk("\t data block offset: %d, occupied sectors: %d\n", superblock.data_block_offset, DATA_BLOCK_SEC_NUM);
+    printk("\t inode usage: %d/%d used, %d free\n", used_inode, INODE_NUM, INODE_NUM - used_inode);
+    printk("\t data block usage: %d/%d used, %d free\n", used_block, DATA_BLOCK_NUM, DATA_BLOCK_NUM - used_block);
     printk("\t inode entry size: %dB, dir entry size: %dB\n", sizeof(inode_t), sizeof(dentry_t));
     return 0;  // do_statfs succeeds
 }
@@ -597,20 +602,44 @@ int do_ln(char *src_path, char *dst_path)
         printk("\n\t [ln] %s is not a file.\n", src_path);
         return 1;  // do_ln fails, src not a file
     }
+
+    char parent_path[128];
+    char dst_name[sizeof(((dentry_t *)0)->filename)];
+    if (!split_parent_child(dst_path, parent_path, dst_name)) {
+        printk("\n\t [ln] invalid destination path %s.\n", dst_path);
+        return 1;
+    }
+
+    inode_t dst_dir_inode;
+    if (parent_path[0] == 0) {
+        dst_dir_inode = current_inode;
+    } else {
+        if (parse_path(current_inode, parent_path, &dst_dir_inode) == 0) {
+            printk("\n\t [ln] destination directory %s does not exist.\n", parent_path);
+            return 1;
+        }
+        if (dst_dir_inode.type != DIR) {
+            printk("\n\t [ln] destination %s is not a directory.\n", parent_path);
+            return 1;
+        }
+    }
+
     //check if dst_file already exists
     inode_t tmp;
-    if(get_inode_by_name(current_inode,dst_path,&tmp)){
+    if(get_inode_by_name(dst_dir_inode, dst_name, &tmp)){
         printk("\n\t [ln] destination file %s already exists.\n", dst_path);
         return 1;  // do_ln fails, dst file already exists
     }
+
     //create hard link
     inode_t *src_inode_ptr = ino2inode(src_inode.ino);
     src_inode_ptr->nlink++;
     int offset = src_inode.ino / INODE_PER_SEC;
     bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
-    //add dentry to current directory
-    int start_sector = current_inode.direct_addr[0] + current_inode.size / SECTOR_SIZE;
-    bios_sd_read(kva2pa((uintptr_t)buffer_f),1, start_sector);
+
+    //add dentry to destination directory (only first sector is used by ls)
+    int start_sector = dst_dir_inode.direct_addr[0];
+    bios_sd_read(kva2pa((uintptr_t)buffer_f), 1, start_sector);
     int i;
     dentry_t *dentry = (dentry_t*)buffer_f;
     for(i = 0;i < DENTRY_PER_SEC;i++){
@@ -618,14 +647,19 @@ int do_ln(char *src_path, char *dst_path)
             break;
         }
     }
+    if (i == DENTRY_PER_SEC) {
+        printk("\n\t [ln] destination directory is full.\n");
+        return 1;
+    }
     dentry[i].ino = src_inode.ino;
-    strcpy(dentry[i].filename, dst_path);
+    strcpy(dentry[i].filename, dst_name);
     bios_sd_write(kva2pa((uintptr_t)buffer_f),1, start_sector);
-    //update current inode size
-    inode_t *curr_inode = ino2inode(current_inode.ino);
+
+    //update destination directory inode size
+    inode_t *curr_inode = ino2inode(dst_dir_inode.ino);
     curr_inode->size += sizeof(dentry_t);
-    offset = current_inode.ino / INODE_PER_SEC;
-    bios_sd_write(kva2pa((uintptr_t)buffer_f),1, FS_START_SECTOR + INODE_OFFSET + offset);
+    offset = dst_dir_inode.ino / INODE_PER_SEC;
+    bios_sd_write(kva2pa((uintptr_t)buffer_f), 1, FS_START_SECTOR + INODE_OFFSET + offset);
     printk("\n\t [ln] hard link from %s to %s created.\n", src_path, dst_path);
     return 0;  // do_ln succeeds 
 }
@@ -837,8 +871,17 @@ int parse_path(inode_t current_node,char* path,inode_t* target){
         }
         return 1;
     }
+    while (path[0] == '/') {
+        path++;
+    }
+    if (path[0] == 0) {
+        if (target != NULL) {
+            *target = current_node;
+        }
+        return 1;
+    }
     int len;
-    for(len = 0; len < strlen(path); len++){
+    for(len = 0; path[len] != 0; len++){
         if(path[len] == '/'){
             break;
         }
@@ -847,11 +890,17 @@ int parse_path(inode_t current_node,char* path,inode_t* target){
     memcpy((uint8_t *)name,(const uint8_t *) path, len);
     name[len] = '\0';
     inode_t temp_inode;
-    if(get_inode_by_name(current_inode,name,&temp_inode) == 0){
+    if(get_inode_by_name(current_node, name, &temp_inode) == 0){
         //not found
         return 0;
     }
-    return parse_path(temp_inode,path+len+1,target);
+    if (path[len] == 0) {
+        if (target != NULL) {
+            *target = temp_inode;
+        }
+        return 1;
+    }
+    return parse_path(temp_inode, path + len + 1, target);
 }
 
 //search inode by name in "node" directory
@@ -998,4 +1047,52 @@ void recurse_indirect_block_helper(uint32_t data_block_addr, int level,char *buf
     //free bmao
     int blk_index = (data_block_addr - FS_START_SECTOR - DATA_BLOCK_OFFSET) * SECTOR_SIZE / BLOCK_SIZE;
     bmap[blk_index / 8] &= ~(1 << (blk_index % 8));
+}
+
+int split_parent_child(const char *path, char *parent_out, char *name_out){
+    if (path == NULL || path[0] == 0) {
+        return 0;
+    }
+
+    int last_slash = -1;
+    for (int i = 0; path[i] != 0; i++) {
+        if (path[i] == '/') {
+            last_slash = i;
+        }
+    }
+
+    if (last_slash < 0) {
+        parent_out[0] = 0;
+        if (strlen(path) >= sizeof(((dentry_t *)0)->filename)) {
+            return 0;
+        }
+        strcpy(name_out, path);
+        return 1;
+    }
+
+    const char *name = path + last_slash + 1;
+    if (name[0] == 0) {
+        return 0;
+    }
+    if (strlen(name) >= sizeof(((dentry_t *)0)->filename)) {
+        return 0;
+    }
+
+    int parent_len = last_slash;
+    while (parent_len > 0 && path[parent_len - 1] == '/') {
+        parent_len--;
+    }
+    if (parent_len == 0) {
+        parent_out[0] = 0;
+    } else {
+        // parent_out is caller-provided; ensure it is large enough
+        if ((unsigned)parent_len >= 128) {
+            return 0;
+        }
+        memcpy((uint8_t *)parent_out, (const uint8_t *)path, parent_len);
+        parent_out[parent_len] = 0;
+    }
+
+    strcpy(name_out, name);
+    return 1;
 }
